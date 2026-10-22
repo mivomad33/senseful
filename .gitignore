@@ -1,0 +1,13 @@
+# 비공개 문서·평가 자료(버전 관리하지 않는다)
+/docs/
+/eval/
+
+# 개인 도구 설정
+/.serena/
+
+# 비밀 값
+.env*
+!.env.example
+
+# OS
+.DS_Store

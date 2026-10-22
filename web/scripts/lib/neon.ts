@@ -14,7 +14,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     headers: { Authorization: `Bearer ${env("NEON_API_KEY")}`, "Content-Type": "application/json", Accept: "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Neon API ${method} ${path}: ${res.status}`);
+  if (!res.ok) throw new Error(`Neon API ${method} ${path}: ${res.status} ${(await res.text()).slice(0, 300)}`);
   return (await res.json()) as T;
 }
 

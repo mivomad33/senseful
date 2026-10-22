@@ -13,14 +13,27 @@ function stamp(d: Date): string {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
+function libpqEnv(url: string): Record<string, string> {
+  const u = new URL(url);
+  return {
+    PGHOST: u.hostname,
+    PGPORT: u.port || "5432",
+    PGUSER: decodeURIComponent(u.username),
+    PGPASSWORD: decodeURIComponent(u.password),
+    PGDATABASE: u.pathname.slice(1),
+    PGSSLMODE: u.searchParams.get("sslmode") || "require",
+    PGCHANNELBINDING: u.searchParams.get("channel_binding") || "prefer",
+  };
+}
+
 /** 백업 파일 경로를 돌려준다. 실패하면 예외를 던진다(실패한 백업 파일은 지운다). */
 export async function backupDb(t: Target, dir = BACKUP_DIR): Promise<string> {
   if (!fs.existsSync(PG_DUMP)) throw new Error(`pg_dump가 없습니다: ${PG_DUMP} (brew install postgresql@18)`);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${t.name === "운영" ? "prod" : "dev"}-${stamp(new Date())}.sql`);
   try {
-    // 주소는 인자 대신 환경 변수로 넘겨 프로세스 목록에 보이지 않게 한다.
-    execFileSync(PG_DUMP, ["--no-owner", "--no-privileges", "--file", file], { env: { ...process.env, PGDATABASE: t.url }, stdio: ["ignore", "ignore", "pipe"] });
+    // 주소(비밀번호 포함)는 인자 대신 libpq 환경 변수로 나눠 넘겨 프로세스 목록에 보이지 않게 한다.
+    execFileSync(PG_DUMP, ["--no-owner", "--no-privileges", "--file", file], { env: { ...process.env, ...libpqEnv(t.url) }, stdio: ["ignore", "ignore", "pipe"] });
   } catch (e) {
     fs.rmSync(file, { force: true });
     throw new Error(`백업 실패: ${((e as { stderr?: Buffer }).stderr?.toString() ?? "").split("\n")[0]}`);

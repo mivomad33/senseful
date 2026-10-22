@@ -46,7 +46,18 @@ function main() {
   run("배포 결과물 검사", "npx", ["tsx", path.join(WEB, "scripts/checks/output-check.ts"), project], WEB);
   const out = run("vercel deploy --prebuilt --prod", "npx", ["--yes", VERCEL, "deploy", "--prebuilt", "--prod"], project, true);
   console.log(out.trim());
-  run("배포 뒤 점검", "npx", ["tsx", path.join(WEB, "scripts/smoke.ts"), SITE_URL], WEB);
+  // 운영 주소가 새 배포로 바뀐 직후에는 잠깐 이전 배포의 HTML이 캐시에서 나가 JS·CSS가 404일 수 있다. 실패하면 기다렸다가 두 번까지 다시 점검한다.
+  for (let attempt = 1; ; attempt++) {
+    console.log(`\n▶ 배포 뒤 점검 (${attempt}번째)`);
+    const ok = spawnSync("npx", ["tsx", path.join(WEB, "scripts/smoke.ts"), SITE_URL], { cwd: WEB, stdio: "inherit" }).status === 0;
+    if (ok) break;
+    if (attempt === 3) {
+      console.error("✗ 배포 뒤 점검 실패.");
+      process.exit(1);
+    }
+    console.log("20초 뒤 다시 점검합니다.");
+    execFileSync("sleep", ["20"]);
+  }
   fs.rmSync(dir, { recursive: true, force: true });
   console.log(`\n✓ 배포 끝: ${SITE_URL} (커밋 ${sha})`);
 }

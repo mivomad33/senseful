@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/*
+ * 색 토큰. 회색 바탕(page) 위에 흰 카드(surface)를 올리는 카드형 디자인이다.
+ * 복습·맞음은 파랑, 새 카드는 보라, 틀림은 주황을 쓴다(빨강·초록 대신 밝기가 다른 파랑·주황).
+ */
+:root {
+  --page: #f1f2f5;
+  --surface: #ffffff;
+  --subtle: #f6f7f9;
+  --line: #eef0f3;
+  --edge: #e2e4e9;
+  --ink: #16181d;
+  --muted: #5b606b;
+  --faint: #a3a8b3;
+  --strong: #16181d;
+  --on-strong: #ffffff;
+  --blue: #1d4ed8;
+  --blue-soft: #eef3ff;
+  --blue-ink: #1e3a8a;
+  --violet: #6d28d9;
+  --violet-soft: #f3f0ff;
+  --violet-ink: #4a3f6b;
+  --orange: #c2410c;
+  --orange-soft: #fff1e8;
+  --orange-ink: #9a3412;
+  --orange-mark: #ffe4d2;
+  --link: #4f6bb8;
+  --hint: #7f858f;
+  --key-edge: #d0d4da;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0e0f12;
+    --surface: #1a1c21;
+    --subtle: #22252b;
+    --line: #2a2d34;
+    --edge: #363a42;
+    --ink: #ecedef;
+    --muted: #9ba1ac;
+    --faint: #5f6570;
+    --strong: #ecedef;
+    --on-strong: #16181d;
+    --blue: #8ab0ff;
+    --blue-soft: #1c2740;
+    --blue-ink: #b9ccff;
+    --violet: #c4a8ff;
+    --violet-soft: #2a2340;
+    --violet-ink: #cdc2ea;
+    --orange: #fb8a4e;
+    --orange-soft: #3a2116;
+    --orange-ink: #fdba8c;
+    --orange-mark: #5a2e18;
+    --link: #8fa6e6;
+    --hint: #7d838e;
+    --key-edge: #3d414a;
+  }
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-edge: var(--edge);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-strong: var(--strong);
+  --color-on-strong: var(--on-strong);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-blue-ink: var(--blue-ink);
+  --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
+  --color-violet-ink: var(--violet-ink);
+  --color-orange: var(--orange);
+  --color-orange-soft: var(--orange-soft);
+  --color-orange-ink: var(--orange-ink);
+  --color-orange-mark: var(--orange-mark);
+  --color-link: var(--link);
+  --color-hint: var(--hint);
+  --color-key-edge: var(--key-edge);
+  --font-sans: var(--font-gothic), "Apple SD Gothic Neo", system-ui, sans-serif;
+  --shadow-card: 0 1px 2px rgb(22 24 29 / 0.04), 0 8px 24px rgb(22 24 29 / 0.05);
+}
+
+/* Tailwind v4는 버튼 커서를 기본 화살표로 둔다. 누를 수 있는 버튼은 모두 손가락 커서로 보인다. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+}

@@ -42,3 +42,8 @@ next-env.d.ts
 
 # local data (DB, 비공개)
 /data/
+
+# E2E 테스트(개발 서버를 따로 띄우는 폴더, 결과)
+/.next-e2e/
+/test-results/
+/playwright-report/

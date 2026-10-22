@@ -12,7 +12,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "TZ=UTC tsx --test $(find src -name \"*.test.ts\" ! -name \"*.int.test.ts\")",
-    "test:integration": "TEST_DATABASE_URL=$(tsx test/setup-db.ts) TZ=UTC tsx --test --test-concurrency=1 $(find src test -name \"*.int.test.ts\")",
+    "test:integration": "TEST_DATABASE_URL=$(tsx test/setup-db.ts) TZ=UTC tsx --test --experimental-test-module-mocks --test-concurrency=1 $(find src test -name \"*.int.test.ts\")",
     "check": "npm run typecheck && npm run lint && npm test",
     "verify": "npm run check && npm run build",
     "check:repo": "tsx scripts/checks/repo-check.ts",
@@ -23,7 +23,8 @@
     "db:dev-reset": "tsx scripts/dev-reset.ts",
     "db:import-local": "tsx scripts/import-local.ts",
     "db:reset-progress": "tsx scripts/reset-progress.ts",
-    "cards:generate": "tsx scripts/generate-cards.ts"
+    "cards:generate": "tsx scripts/generate-cards.ts",
+    "test:e2e": "tsx test/e2e/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

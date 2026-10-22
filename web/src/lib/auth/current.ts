@@ -2,6 +2,7 @@
 // 요청마다 한 번만 DB를 보도록 React cache로 묶는다.
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import type { StudyUser } from "@/lib/study/schedule";
@@ -11,6 +12,7 @@ import { isAdmin } from "./users";
 export type CurrentUser = User & { isAdmin: boolean };
 
 export const currentUser = cache(async (): Promise<CurrentUser | null> => {
+  await connection(); // 요청마다 다른 값(세션, 지금 시각)을 쓰므로 미리 그리지 않는다
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const s = await validateSession(db, token);

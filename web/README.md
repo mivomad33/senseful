@@ -1,125 +1,124 @@
 # Senseful 앱
 
-Next.js(App Router)·Tailwind·Drizzle(SQLite) 앱이다. DB 파일과 사전 수집 데이터는 저장소에 넣지 않는다.
+Next.js(App Router) + Neon Postgres + Drizzle ORM. 운영은 Vercel(`https://senseful.vercel.app`, 함수 리전 `sin1`)이다.
+카드 생성처럼 로컬 수집 DB(`data/app.db`, git·배포 제외)가 필요한 일은 로컬 맥에서 명령으로 한다.
 
 ## 처음 설정
 
-Node 24를 쓴다(저장소 루트 `.nvmrc`). Node 버전을 바꾸면 `npm rebuild better-sqlite3`로 네이티브 모듈을 다시 빌드하고 `npm run make-launcher`도 다시 실행한다.
+Node 24(`.nvmrc`)를 쓴다. 저장소 루트의 `.githooks`를 push 전 훅으로 쓰도록 `npm install`이 연결한다(`prepare`).
 
 ```bash
+cd web
 npm install
-npm run db:migrate   # data/app.db 생성·마이그레이션 적용
-npm run db:import -- <수집 결과 JSON>   # 사전 수집 결과 → items (다시 실행해도 된다)
-npm run dev          # 개발 서버 http://localhost:3000 (개발 DB)
+cp .env.example .env.local   # 값을 채운다(아래 "환경 변수")
+npm run dev                  # http://localhost:3000, 개발 DB를 쓴다
 ```
 
-테스트는 `npm test`(Node 내장 테스트, 메모리 DB를 쓰고 Claude API를 부르지 않는다)로 돌린다.
+백업에는 서버와 같은 버전의 `pg_dump`가 필요하다: `brew install postgresql@18`.
+
+## 환경 변수
+
+`web/.env.local`에만 둔다(커밋하지 않는다). 예시는 `.env.example`이다. 하루 한도 같은 비밀이 아닌 설정은 `src/config.ts`의 기본값을 쓰고, 필요하면 아래 이름으로 바꾼다.
+
+| 이름 | 쓰는 곳 |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | 판정, 카드 생성 |
+| `DATABASE_URL`, `DATABASE_URL_UNPOOLED` | 개발 DB(Neon `dev` 브랜치). 개발 서버와 `--dev` 명령. Vercel에서는 `DATABASE_URL`에 운영 DB 풀링 주소를 넣는다 |
+| `PROD_DATABASE_URL`, `PROD_DATABASE_URL_UNPOOLED` | 운영 DB(Neon `production` 브랜치). 관리 명령(백업, 마이그레이션, 이전, 카드 생성) |
+| `NEON_API_KEY`, `NEON_PROJECT_ID`, `NEON_DEV_BRANCH_ID`, `NEON_PROD_BRANCH_ID` | 개발 DB 초기화, 테스트 브랜치 |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 구글 로그인 |
+| `ADMIN_EMAIL` | 관리자 구글 계정 이메일(아래 "관리자") |
+| `SENSEFUL_GRADE_LIMIT_PER_USER`, `SENSEFUL_GRADE_LIMIT_TOTAL` | 하루 판정 한도(기본 50, 300) |
+| `SENSEFUL_DAY_START_HOUR` | 하루가 바뀌는 시각(한국 시간, 기본 4) |
+| `SENSEFUL_REVIEWS_PER_DAY`, `SENSEFUL_EXTRA_NEW_STEP` | 하루 복습 상한(200), "새 카드 더 학습" 장수(10) |
+| `SENSEFUL_GRADE_MODEL`, `SENSEFUL_GEN_MODEL` | 판정·생성 모델(기본 `claude-opus-5-5`) |
+
+Vercel 환경 변수는 **Production에만** 넣는다: `DATABASE_URL`(운영 풀링 주소), `ANTHROPIC_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ADMIN_EMAIL`.
+`vercel env pull`은 `.env.local`을 덮어쓰므로 쓰지 않는다.
 
 ## 개발 DB
 
-실제 학습 기록이 개발·확인 중에 바뀌지 않게, 실행 방식에 따라 DB가 갈린다.
+개발 서버(`npm run dev`)와 `--dev` 명령은 Neon `dev` 브랜치를 쓴다. 개발 서버는 켤 때 마이그레이션을 적용하고, 화면 오른쪽 위에 "개발 DB"가 보인다.
 
-| 실행 | DB |
+- 운영 DB의 지금 상태로 되돌리기: `npm run db:dev-reset` (개발 DB의 데이터는 사라진다)
+- 테스트 로그인(개발 서버에서만): `http://localhost:3000/api/auth/dev-login?as=admin`(관리자), `?as=user1`, `?as=user2` …
+  `next dev`에서만 경로가 생기고 빌드 결과물에는 없다(`next.config.ts`의 `pageExtensions`).
+- 구글 로그인을 개발 서버에서 확인하려면 `http://localhost:3000`으로 접속한다(Google에 등록한 주소).
+
+## 명령
+
+관리 명령의 기본 대상은 **운영 DB**이고 `--dev`를 붙이면 개발 DB다. 운영 DB를 바꾸는 명령은 실행 전에 자동으로 백업한다.
+
+| 명령 | 하는 일 |
 | --- | --- |
-| 운영 서버(`npm start`, Dock 아이콘) | `data/app.db` (실제 학습 DB) |
-| 개발 서버(`npm run dev`) | `data/dev.db` (개발 DB, 실제 DB의 사본) |
-| 명령어(`db:backup`, `db:reset-progress`, `db:import`, `db:migrate`) | `data/app.db` |
+| `npm run cards:generate -- <장수> [--level b1] [--dev]` | 카드 생성(아래) |
+| `npm run db:backup [-- --dev] [-- 폴더]` | 원격 DB를 `data/backups/`에 SQL 파일로 받는다 |
+| `npm run db:migrate [-- --dev]` | 마이그레이션 적용 |
+| `npm run db:import-local [-- --dev]` | 로컬 수집 DB의 항목·카드·내 학습 기록을 원격으로 옮긴다(처음 이전, 다시 실행해도 기록은 두 번 옮기지 않는다) |
+| `npm run db:reset-progress -- <이메일> [--dev]` | 한 사용자의 학습 기록 초기화(확인을 받는다) |
+| `npm run db:dev-reset` | 개발 DB를 운영 DB 상태로 되돌린다 |
 
-- 개발 서버를 처음 켤 때 개발 DB가 없으면 실제 DB를 복사해 만든다. 켤 때마다 마이그레이션도 적용한다.
-- 개발 서버 화면 오른쪽 위에 "개발 DB" 표시가 나온다. 이 표시가 없으면 실제 앱이다.
-- 개발 DB를 실제 DB의 지금 상태로 되돌리려면 개발 서버를 끄고 아래를 실행한다. 실제 DB는 읽기만 한다.
+### 카드 생성
 
-```bash
-npm run db:dev-reset
-```
-
-- 명령어를 개발 DB에 쓰려면 `SENSEFUL_DB_PATH=data/dev.db npm run db:reset-progress`처럼 앞에 붙인다.
-  기본값을 실제 DB로 둔 것은 백업이 개발 DB를 받는 실수를 막기 위해서다.
-- 개발 DB에서도 판정·카드 생성은 실제 Claude API를 부르므로 비용이 든다. 기록만 개발 DB에 남는다.
-- 개발 서버도 운영 서버처럼 이 맥(127.0.0.1)에서만 접속을 받는다.
-
-## 매일 쓰기
-
-Dock의 Senseful 아이콘을 누르면 서버가 꺼져 있을 때만 켜고 기본 브라우저로 http://localhost:4747 을 연다.
-서버는 요청이 30분(`SENSEFUL_IDLE_MINUTES`) 동안 없으면 스스로 꺼진다. 안 쓸 때 메모리를 쓰지 않기 위해서다.
-학습 중에는 답안 제출·다음 카드마다 요청이 가서 꺼지지 않는다. 창을 띄워 둔 채 30분 넘게 자리를 비워 꺼졌으면 아이콘을 다시 누른다.
-
-홈에서 "학습 시작"으로 오늘의 학습을, "새 카드 만들기"로 카드 20장(약 $0.1)을 만든다.
-판정과 생성은 Claude API를 부르므로 `.env.local`에 `ANTHROPIC_API_KEY`가 있어야 한다.
-
-### 아이콘 앱 만들기(처음 한 번)
+카드는 공용이고 관리자가 로컬 맥에서 원할 때 만든다. 뜻풀이가 로컬 `data/app.db`에만 있어서 서버에서는 만들 수 없다.
 
 ```bash
-npm run make-launcher   # ~/Applications/Senseful.app
+npm run cards:generate -- 200            # 카드가 없는 항목 중 가장 낮은 레벨부터 200장
+npm run cards:generate -- 200 --level b1 # B1에서만(모자라면 있는 만큼만)
 ```
 
-Finder에서 `~/Applications/Senseful.app`을 Dock으로 끌어다 둔다.
-앱에는 저장소 위치와 node 경로가 들어 있으므로, 저장소를 옮기거나 node 버전을 바꾸거나 `SENSEFUL_PORT`를 바꾸면 다시 실행한다.
-지우려면 앱을 휴지통에 버린다. 시스템 설정이나 로그인 항목은 건드리지 않는다.
+- 장수는 이번 실행에서 새로 만들 장수다. 원격에서 카드가 없는 항목만 고르므로, 끊긴 뒤 다시 실행해도 만든 카드를 다시 만들지 않는다.
+- 20장씩 묶어 Claude API(Opus 5.5)를 부르고, 진행 상황(만든 수, 실패 수)과 비용을 출력한다. 20장에 약 $0.1이다.
+- 실패한 항목은 카드 없이 남아 다음 실행 때 다시 후보가 된다. 카드 내용에 원문 문자열·금지 문자열이 들어가면 실패로 보고 한 번 다시 만든다.
+- 관리자 화면의 "카드 재고"가 레벨별로 부족을 알리고 그 레벨의 명령을 보여 준다.
 
-- 앱은 `web/`에서 `npm start`를 띄우고 출력은 `data/server.log`에 쌓는다. 빌드(`.next/`)가 없으면 먼저 빌드한다.
-- 서버는 켤 때 DB 마이그레이션을 적용한다(이미 적용한 것은 건너뛴다). 스키마가 바뀐 코드를 받아도 따로 `db:migrate`를 하지 않아도 된다.
-- 서버가 뜨지 않으면 알림을 띄운다. 이때는 `data/server.log`를 본다.
-- macOS는 서명 없는 앱을 거부하므로(-10669) 만들 때 ad-hoc 서명을 붙인다.
-
-### 코드를 바꾼 뒤
+## 백업과 복원
 
 ```bash
-npm run build                          # 새 빌드를 만든다
-kill $(lsof -tiTCP:4747 -sTCP:LISTEN)  # 켜져 있는 서버를 끈다. 다음에 아이콘을 누르면 새 빌드로 뜬다
+npm run db:backup                              # 운영 DB → data/backups/prod-YYYYMMDD-HHMMSS.sql
+psql "<운영 DB 풀링하지 않는 주소>" -f <백업 파일>  # 복원(빈 DB에)
 ```
 
-### 터미널에서 켜기
+## 관리자
 
-`npm start`는 아이콘 앱과 같은 서버(`scripts/serve.ts`)를 띄운다. 이 맥(127.0.0.1)에서만 접속을 받는다.
-포트는 다른 개발 서버(대개 3000)와 겹치지 않게 4747로 두었다. 개발 서버(`npm run dev`)는 3000이고 첫 화면이 느리다.
+`ADMIN_EMAIL`과 같은 이메일의 구글 계정이 관리자다. 관리자는 홈의 "관리자"로 관리자 화면에 들어가고, 판정 후 화면과 관리자 화면에서 공용 카드를 고치거나 뺀다.
+관리자 판정은 하루 한도와 전체 횟수에서 빠진다.
+처음 이전(`db:import-local`)은 관리자 이메일로 계정을 미리 만들고, 그 이메일로 처음 구글 로그인하면 그 계정에 연결된다.
 
-## DB 백업과 복원
+## 테스트
 
-학습 기록은 `data/app.db` 하나에만 있다(git 제외). 이 파일을 잃으면 카드와 복습 기록이 모두 사라진다.
-
-```bash
-npm run db:backup                      # data/backups/app-YYYYMMDD-HHMMSS.db
-npm run db:backup -- ~/Documents/senseful-backups   # 다른 폴더(외장 디스크, 클라우드 동기화 폴더 등)
-```
-
-- 앱이 켜져 있어도 된다. SQLite 온라인 백업을 쓰고, 끝나면 무결성 검사와 표별 행 수를 출력한다.
-- `data/backups/`는 같은 디스크라 디스크 고장에는 소용없다. 가끔은 다른 폴더로도 받는다.
-  비공개 데이터이므로 공개 위치나 공유 폴더에는 두지 않는다.
-- 복원: 앱을 끄고 `data/app.db`, `data/app.db-wal`, `data/app.db-shm`을 다른 이름으로 옮긴 뒤, 백업 파일을 `data/app.db`로 복사한다.
-  `-wal`·`-shm`을 남겨 두면 옛 기록이 섞일 수 있다.
-
-## 학습 기록 초기화
-
-```bash
-npm run db:reset-progress
-```
-
-복습 기록(`review_logs`)과 새 카드 더 학습 기록(`study_days`)을 모두 지우고 카드를 새 카드 상태로 되돌린다. 카드 내용(직접 고친 것 포함)과 빼기 표시는 그대로 둔다.
-
-- 지울 수를 보여 주고 `y`를 입력해야 진행한다. 진행하면 먼저 `data/backups/`에 백업하고, 백업이 실패하면 초기화하지 않는다.
-- 되돌리려면 출력된 백업 파일로 위의 복원 절차를 따른다.
-- 복습 기록은 판정 프롬프트 개선과 FSRS 최적화의 재료이므로, 실사용을 시작한 뒤에는 쓰지 않는 것이 좋다.
-- 앱이 켜져 있어도 되지만, 학습 화면을 열어 둔 채 실행했다면 홈에서 다시 들어간다.
-
-## 설정
-
-`web/.env.local`에 환경 변수로 둔다. 없으면 `src/config.ts`의 기본값을 쓴다.
-
-| 변수 | 기본값 | 뜻 |
+| 명령 | 내용 | 필요한 것 |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | (없음) | Claude API 키 |
-| `SENSEFUL_DB_PATH` | 운영 `data/app.db`, 개발 서버 `data/dev.db` | SQLite 파일 경로. 주면 실행 방식과 상관없이 이 값을 쓴다 |
-| `SENSEFUL_NEW_PER_DAY` | `20` | 하루 새 카드 상한 |
-| `SENSEFUL_EXTRA_NEW_STEP` | `10` | 오늘 카드를 다 끝낸 뒤 "새 카드 더 학습" 한 번에 더하는 장수 |
-| `SENSEFUL_REVIEWS_PER_DAY` | `200` | 하루 복습 상한 |
-| `SENSEFUL_DAY_START_HOUR` | `4` | 하루가 바뀌는 시각(로컬 시간). 상한과 형제 카드 미루기를 이 시각 기준으로 센다 |
-| `SENSEFUL_PORT` | `4747` | 운영 서버(`npm start`, 아이콘 앱) 포트. 바꾸면 `npm run make-launcher`를 다시 실행한다 |
-| `SENSEFUL_IDLE_MINUTES` | `30` | 운영 서버가 요청 없이 이 시간(분)이 지나면 스스로 꺼진다. `0`이면 끄지 않는다 |
-| `SENSEFUL_GEN_MODEL` | `claude-opus-5-5` | 카드 생성 모델 |
-| `SENSEFUL_GRADE_MODEL` | `claude-opus-5-5` | 정답 판정 모델 |
+| `npm test` | 단위 테스트(DB 없음): 하루 경계, 통계 표시, 설정 확인, 말투 검사, 체험 카드 판정 등 | 없음 |
+| `npm run test:integration` | 통합 테스트(실제 Postgres): 권한, 사용자 분리, 판정 한도·동시 요청, 설정, 탈퇴, 빼기, 신고, 생성 | `.env.local`의 `NEON_*`(테스트 브랜치 `test`를 만들거나 비운다) |
+| `npm run test:e2e` | E2E(Playwright, 데스크톱·375px): 소개·체험 카드, 로그인→학습→판정, 설정, 관리자 | 위와 같음 + `npx playwright install chromium` |
 
-## 스키마 바꾸기
+통합·E2E는 Neon `test` 브랜치(운영에서 분기)를 쓰고 시작할 때 스키마를 지운다. 운영·개발 브랜치는 건드리지 않는다. E2E는 3100 포트에 따로 개발 서버를 띄우고 가짜 판정을 쓴다(API 비용 없음).
 
-`src/db/schema.ts`를 고친 뒤 `npm run db:generate`로 `drizzle/`에 마이그레이션을 만들고 `npm run db:migrate`로 적용한다.
-운영 서버(`npm start`, 아이콘 앱)는 켤 때 마이그레이션을 자동으로 적용한다.
+## verify, push 전 훅, CI
+
+- `npm run verify`: 타입 검사 → 린트 → 단위 테스트 → 빌드. 머지 전에도 돌린다.
+- push 전 훅(`.githooks/pre-push`): `verify` → 공개 저장소 검사(`npm run check:repo`와 같은 검사를 push하는 커밋 범위·메시지·브랜치 이름에). 실패하면 push가 멈춘다.
+  검사 기준(금지 문자열 목록, 원문 문자열, 비밀 값)은 공개 저장소 밖의 비공개 파일·로컬 DB·`.env.local`에서 읽고, 하나라도 없으면 push를 멈춘다.
+- CI(GitHub Actions): 모든 push와 PR에서 "검사"(타입 검사·린트·단위 테스트) → "빌드". 배포하지 않는다.
+
+## DB 스키마 변경
+
+1. `src/db/schema.ts`를 고치고 `npm run db:generate`로 마이그레이션 파일을 만든다(`drizzle/`).
+2. 개발 DB: 개발 서버를 켜면 적용된다(또는 `npm run db:migrate -- --dev`).
+3. 운영 DB: 배포 전에 `npm run db:migrate`(자동 백업 후 적용).
+4. `npm run deploy`
+
+## 배포
+
+Vercel CLI `vercel@65.1.0`을 `npx`로 쓴다(이 맥에 `vercel login`이 돼 있어야 한다). Git 연동은 없어 push로는 배포되지 않는다.
+
+```bash
+npm run deploy           # verify → 커밋을 임시 폴더로 꺼내 vercel build → 결과물 검사 → vercel deploy --prebuilt --prod → 배포 뒤 점검
+npm run smoke            # 배포 뒤 점검만(기본 https://senseful.vercel.app)
+npm run check:output     # 결과물 검사만(.vercel/output)
+```
+
+- 커밋하지 않은 변경이 있으면 배포하지 않는다. 작업 폴더가 아니라 커밋된 파일만 꺼내 빌드해, `.env.local`·`data/` 같은 로컬 파일이 결과물에 섞이지 않게 한다.
+- 결과물 검사: `data/`·`*.db`·`.env*` 파일, 금지 문자열·원문 문자열·비밀 값, 테스트 로그인 흔적이 없고, 공개 페이지의 제목·설명·canonical·링크 미리보기·아이콘, `robots.txt`·`sitemap.xml`이 정해진 값인지 본다.
+- 배포 뒤 점검: 공개 페이지·`robots.txt`·`sitemap.xml`·미리보기 이미지·아이콘, 로그인 없이 막히는 화면·API, 테스트 로그인 경로, 내려오는 HTML·JS·CSS의 금지 문자열, http→https를 밖에서 확인한다(상태를 바꾸는 요청은 하지 않는다).

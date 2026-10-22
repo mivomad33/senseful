@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button } from "@/components/button";
+import { Button, Spinner } from "@/components/button";
 import { Card } from "@/components/ui";
 import type { Level } from "@/lib/study/schedule";
 import { updateSettings, withdraw } from "../actions";
@@ -106,16 +106,23 @@ export function WithdrawSection() {
             <Button variant="secondary" onClick={() => setConfirming(false)} disabled={pending} className="flex-1">
               취소
             </Button>
-            <Button onClick={() => start(() => withdraw())} loading={pending} className="flex-1 bg-orange text-surface">
+            <button
+              type="button"
+              onClick={() => start(() => withdraw())}
+              disabled={pending}
+              aria-busy={pending || undefined}
+              className="inline-flex h-14 flex-1 items-center justify-center gap-2 rounded-[14px] bg-orange px-4 font-bold text-surface"
+            >
+              {pending && <Spinner />}
               탈퇴하기
-            </Button>
+            </button>
           </div>
         </div>
       ) : (
         <div>
-          <Button variant="text" onClick={() => setConfirming(true)} className="text-orange-ink">
+          <button type="button" onClick={() => setConfirming(true)} className="text-sm font-medium text-orange-ink underline-offset-[3px] hover:underline">
             탈퇴하기
-          </Button>
+          </button>
         </div>
       )}
     </Card>

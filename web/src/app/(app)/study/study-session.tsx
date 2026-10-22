@@ -478,11 +478,11 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
       {!panel && (
         <div className="flex gap-3">
           {!excluded && (
-            <Button variant="secondary" onClick={correct} disabled={pending} className="flex-1 border-0">
+            <Button variant="secondary" onClick={correct} disabled={pending} className="flex-1 border-0 text-[15px] whitespace-nowrap sm:text-base">
               {ok ? "틀림으로 정정" : "맞음으로 정정"}
             </Button>
           )}
-          <Button ref={nextRef} onClick={() => loadNext()} disabled={pending} className="flex-[2]">
+          <Button ref={nextRef} onClick={() => loadNext()} disabled={pending} className="flex-[1.3] sm:flex-[2]">
             다음 카드
           </Button>
         </div>

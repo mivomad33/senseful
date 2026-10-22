@@ -2,7 +2,6 @@
 // 로그인한 사용자는 proxy가 홈으로 보낸다.
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { buttonStyles } from "@/components/button";
 import { Footer } from "@/components/footer";
 import { Badge, Card, Logo } from "@/components/ui";
 import { SITE_URL } from "@/config";
@@ -42,7 +41,7 @@ function GoogleMark() {
 
 function GoogleButton({ className = "" }: { className?: string }) {
   return (
-    <a href={LOGIN} className={buttonStyles("primary", `gap-2.5 px-[22px] ${className}`)}>
+    <a href={LOGIN} className={`inline-flex h-14 items-center justify-center gap-2.5 rounded-[14px] bg-strong px-[22px] text-[17px] font-bold text-on-strong ${className}`}>
       <GoogleMark />
       Google로 시작하기
     </a>
@@ -81,7 +80,7 @@ export default function Landing() {
       <div className="mx-auto w-full max-w-[1040px] px-4 pt-[18px] pb-9 min-[421px]:px-5 min-[421px]:pt-6 min-[421px]:pb-12">
         <div className="flex items-center justify-between">
           <Logo />
-          <a href={LOGIN} className={buttonStyles("secondary", "h-10 rounded-[10px] px-3.5 text-sm")}>
+          <a href={LOGIN} className="inline-flex h-10 items-center justify-center rounded-[10px] border border-edge bg-surface px-3.5 text-sm font-bold">
             로그인
           </a>
         </div>

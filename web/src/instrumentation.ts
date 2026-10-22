@@ -5,5 +5,10 @@ export async function register() {
   const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
   if (!url) return;
   const { migrateDb } = await import("@/db/migrate");
-  await migrateDb(url);
+  try {
+    await migrateDb(url);
+  } catch (e) {
+    // DB에 닿지 않아도 개발 서버는 띄운다(화면은 오류 화면을 보인다).
+    console.error(`[개발 DB] 마이그레이션 실패: ${(e as Error).name}`);
+  }
 }

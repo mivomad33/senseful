@@ -72,10 +72,10 @@ export function ReportItem({ report }: { report: ReportRow }) {
             </p>
           )}
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setEditing(false)} disabled={pending} className="h-11 flex-1">
+            <Button variant="secondary" onClick={() => setEditing(false)} disabled={pending} className="flex-1">
               취소
             </Button>
-            <Button type="submit" loading={pending} className="h-11 flex-1 text-[15px]">
+            <Button type="submit" loading={pending} className="flex-1">
               저장
             </Button>
           </div>

@@ -55,7 +55,7 @@ export function DemoCard() {
             — {DEMO.senseKo}
           </div>
           <div className="text-[13px] text-muted">{ok ? DEMO.reasonOk : DEMO.reasonNg}</div>
-          <Button variant="secondary" className="self-end px-[22px]" onClick={() => setResult(null)}>
+          <Button variant="secondary" className="self-end" onClick={() => setResult(null)}>
             다시 해 보기
           </Button>
         </div>

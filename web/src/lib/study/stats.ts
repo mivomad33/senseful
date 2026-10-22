@@ -1,49 +1,53 @@
-// 홈 화면의 학습 기록, 레벨별 학습 현황, 복습 예정.
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+// 홈 화면의 학습 기록, 레벨별 학습 현황, 복습 예정. 모두 사용자 기준이다.
+import { and, asc, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
 import { State } from "ts-fsrs";
 import { config } from "@/config";
 import type { Db } from "@/db";
-import { cards, items, reviewLogs } from "@/db/schema";
-import { dayKey, dayRange } from "./schedule";
+import { cards, items, reviewLogs, userCards } from "@/db/schema";
+import { addDays, dayKey, dayRange } from "@/lib/day";
+import { LEVELS, type Level, type StudyUser } from "./schedule";
 
-export const LEVELS = ["a1", "a2", "b1", "b2", "c1"] as const;
+export { LEVELS };
 /** 다음 복습까지 이 일수 이상 남은 카드를 "익숙함"으로 센다(Anki의 mature 기준). */
 export const MATURE_DAYS = 21;
 
 export interface LevelStat {
-  level: (typeof LEVELS)[number];
-  /** 수집한 뜻(카드를 만들 수 있는 전체) */
+  level: Level;
+  /** 전체 학습 항목(카드가 아직 없는 항목 포함) */
   items: number;
-  /** 만든 카드(뺀 카드 제외) */
+  /** 공용 카드 중 관리자가 뺀 카드와 이 사용자가 뺀 카드를 제외한 수 */
   cards: number;
   /** 한 번이라도 학습한 카드 */
   studied: number;
   /** 다음 복습까지 MATURE_DAYS일 이상 남은 카드 */
   mature: number;
-  /** 아직 처음 학습하지 않은 뜻(전체 뜻 − 학습함 − 뺀 카드). 카드를 만들었지만 학습하지 않은 것도 포함한다 */
+  /** 아직 처음 학습하지 않은 뜻(전체 뜻 − 학습함 − 뺀 카드). 카드를 만들었지만 학습하지 않은 것과 카드가 아직 없는 것도 포함한다 */
   remaining: number;
+  /** 이 사용자가 새 카드를 받지 않기로 한 레벨 */
+  excluded: boolean;
 }
 
-export function levelStats(db: Db): LevelStat[] {
-  const live = sql`${cards.id} is not null and ${cards.excludedAt} is null`;
-  const rows = db
+export async function levelStats(db: Db, user: Pick<StudyUser, "id" | "excludedLevels">): Promise<LevelStat[]> {
+  const live = sql`${cards.id} is not null and ${cards.excludedAt} is null and ${userCards.excludedAt} is null`;
+  const rows = await db
     .select({
       level: items.cefr,
-      items: sql<number>`count(*)`,
-      cards: sql<number>`coalesce(sum(${live}), 0)`,
-      studied: sql<number>`coalesce(sum(${live} and ${cards.state} <> ${State.New}), 0)`,
-      mature: sql<number>`coalesce(sum(${live} and ${cards.state} = ${State.Review} and ${cards.scheduledDays} >= ${MATURE_DAYS}), 0)`,
-      excluded: sql<number>`coalesce(sum(${cards.excludedAt} is not null), 0)`,
+      items: sql<number>`count(*)::int`,
+      cards: sql<number>`count(*) filter (where ${live})::int`,
+      studied: sql<number>`count(*) filter (where ${live} and ${userCards.state} <> ${State.New})::int`,
+      mature: sql<number>`count(*) filter (where ${live} and ${userCards.state} = ${State.Review} and ${userCards.scheduledDays} >= ${MATURE_DAYS})::int`,
+      excluded: sql<number>`count(*) filter (where ${cards.excludedAt} is not null or ${userCards.excludedAt} is not null)::int`,
     })
     .from(items)
-    .leftJoin(cards, sql`${cards.itemId} = ${items.id}`)
-    .groupBy(items.cefr)
-    .all();
+    .leftJoin(cards, eq(cards.itemId, items.id))
+    .leftJoin(userCards, and(eq(userCards.cardId, cards.id), eq(userCards.userId, user.id)))
+    .groupBy(items.cefr);
   const byLevel = new Map(rows.map((r) => [r.level, r]));
   return LEVELS.map((level) => {
+    const excluded = user.excludedLevels.includes(level);
     const r = byLevel.get(level);
-    if (!r) return { level, items: 0, cards: 0, studied: 0, mature: 0, remaining: 0 };
-    return { level, items: r.items, cards: r.cards, studied: r.studied, mature: r.mature, remaining: r.items - r.studied - r.excluded };
+    if (!r) return { level, items: 0, cards: 0, studied: 0, mature: 0, remaining: 0, excluded };
+    return { level, items: r.items, cards: r.cards, studied: r.studied, mature: r.mature, remaining: r.items - r.studied - r.excluded, excluded };
   });
 }
 
@@ -93,24 +97,19 @@ export const FORECAST_BUCKETS = [
 ] as const;
 
 /**
- * 한 번 이상 학습한 카드(뺀 카드 제외)의 다음 복습일을 레벨별·구간별로 센다. counts는 FORECAST_BUCKETS 순서다.
+ * 이 사용자가 한 번 이상 학습한 카드(뺀 카드 제외)의 다음 복습일을 레벨별·구간별로 센다. counts는 FORECAST_BUCKETS 순서다.
  * 날짜는 하루가 바뀌는 시각 기준이고, 하루 복습 상한은 따지지 않은 예정 수다.
  */
-export function reviewForecast(db: Db, now = new Date(), dayStartHour = config.dayStartHour): { level: (typeof LEVELS)[number]; counts: number[] }[] {
+export async function reviewForecast(db: Db, userId: number, now = new Date(), dayStartHour = config.dayStartHour): Promise<{ level: Level; counts: number[] }[]> {
   const { start } = dayRange(now, dayStartHour);
-  const dayAfter = (n: number) => {
-    const d = new Date(start);
-    d.setDate(d.getDate() + n);
-    return d.getTime();
-  };
-  const bounds = FORECAST_BUCKETS.map((b) => ({ from: dayAfter(b.from), to: b.to === null ? Infinity : dayAfter(b.to) }));
+  const bounds = FORECAST_BUCKETS.map((b) => ({ from: addDays(start, b.from).getTime(), to: b.to === null ? Infinity : addDays(start, b.to).getTime() }));
   const byLevel = new Map(LEVELS.map((level) => [level, FORECAST_BUCKETS.map(() => 0)]));
-  const rows = db
-    .select({ due: cards.due, level: items.cefr })
-    .from(cards)
+  const rows = await db
+    .select({ due: userCards.due, level: items.cefr })
+    .from(userCards)
+    .innerJoin(cards, eq(cards.id, userCards.cardId))
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(ne(cards.state, State.New), isNull(cards.excludedAt)))
-    .all();
+    .where(and(eq(userCards.userId, userId), ne(userCards.state, State.New), isNull(userCards.excludedAt), isNull(cards.excludedAt)));
   for (const { due, level } of rows) {
     const t = due.getTime();
     const i = bounds.findIndex((b) => t >= b.from && t < b.to);
@@ -141,19 +140,33 @@ export interface StudyHistory {
   streak: number;
 }
 
+/** 학습일 키를 SQL로(한국 시간에서 dayStartHour를 뺀 날짜). lib/day.ts의 dayKey와 같은 값이다. */
+const sqlDayKey = (dayStartHour: number) =>
+  sql<string>`to_char((${reviewLogs.reviewedAt} at time zone 'Asia/Seoul') - make_interval(hours => ${dayStartHour}), 'YYYY-MM-DD')`;
+
 /** 날짜별 학습 기록. 따로 기록하지 않고 review_logs로 계산한다. */
-export function studyHistory(db: Db, now = new Date(), dayStartHour = config.dayStartHour, days = 7): StudyHistory {
-  const rows = db
-    .select({ at: reviewLogs.reviewedAt, cardId: reviewLogs.cardId, state: reviewLogs.state, isCorrect: reviewLogs.isCorrect })
-    .from(reviewLogs)
-    .orderBy(asc(reviewLogs.reviewedAt))
-    .all();
+export async function studyHistory(db: Db, userId: number, now = new Date(), dayStartHour = config.dayStartHour, days = 7): Promise<StudyHistory> {
+  const { start, end } = dayRange(now, dayStartHour);
+  const from = addDays(start, -(days - 1));
+  const key = sqlDayKey(dayStartHour);
+  const [rows, studied] = await Promise.all([
+    db
+      .select({ at: reviewLogs.reviewedAt, cardId: reviewLogs.cardId, state: reviewLogs.state, isCorrect: reviewLogs.isCorrect })
+      .from(reviewLogs)
+      .where(and(eq(reviewLogs.userId, userId), gte(reviewLogs.reviewedAt, from), lt(reviewLogs.reviewedAt, end)))
+      .orderBy(asc(reviewLogs.reviewedAt)),
+    db
+      .selectDistinct({ day: key })
+      .from(reviewLogs)
+      .where(eq(reviewLogs.userId, userId))
+      .orderBy(sql`1 desc`),
+  ]);
   const empty = (date: Date): StudyDay => ({ day: dayKey(date, dayStartHour), date, answers: 0, newCards: 0, reviewCards: 0, correct: 0 });
   const byDay = new Map<string, StudyDay & { seen: Set<number>; fresh: Set<number> }>();
   for (const r of rows) {
-    const key = dayKey(r.at, dayStartHour);
-    let d = byDay.get(key);
-    if (!d) byDay.set(key, (d = { ...empty(dayRange(r.at, dayStartHour).start), seen: new Set(), fresh: new Set() }));
+    const k = dayKey(r.at, dayStartHour);
+    let d = byDay.get(k);
+    if (!d) byDay.set(k, (d = { ...empty(dayRange(r.at, dayStartHour).start), seen: new Set(), fresh: new Set() }));
     d.answers++;
     d.seen.add(r.cardId);
     if (r.state === State.New) {
@@ -163,20 +176,15 @@ export function studyHistory(db: Db, now = new Date(), dayStartHour = config.day
     if (r.isCorrect) d.correct++;
   }
 
-  const { start } = dayRange(now, dayStartHour);
-  const dayAt = (i: number) => {
-    const d = new Date(start);
-    d.setDate(d.getDate() - i);
-    return d;
-  };
   const list = Array.from({ length: days }, (_, i): StudyDay => {
-    const date = dayAt(i);
+    const date = addDays(start, -i);
     const d = byDay.get(dayKey(date, dayStartHour));
     if (!d) return empty(date);
     const { seen, fresh, ...rest } = d;
     return { ...rest, reviewCards: [...seen].filter((id) => !fresh.has(id)).length };
   });
+  const studiedDays = new Set(studied.map((r) => r.day));
   let streak = 0;
-  for (let i = byDay.has(dayKey(start, dayStartHour)) ? 0 : 1; byDay.has(dayKey(dayAt(i), dayStartHour)); i++) streak++;
+  for (let i = studiedDays.has(dayKey(start, dayStartHour)) ? 0 : 1; studiedDays.has(dayKey(addDays(start, -i), dayStartHour)); i++) streak++;
   return { days: list, streak };
 }

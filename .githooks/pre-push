@@ -1,0 +1,10 @@
+#!/bin/sh
+# push 전 검사(web/README.md "push 전 훅"). verify → 공개 저장소 검사. 하나라도 실패하면 push를 멈춘다.
+# 인자: $1 원격 이름, $2 원격 주소. 표준 입력: push하는 ref 줄.
+set -e
+root=$(git rev-parse --show-toplevel)
+refs=$(cat)
+echo "▶ verify"
+npm --prefix "$root/web" run --silent verify
+echo "▶ 공개 저장소 검사"
+printf '%s\n' "$refs" | npm --prefix "$root/web" exec --silent -- tsx "$root/web/scripts/checks/repo-check.ts" --pre-push "$1"

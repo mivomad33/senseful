@@ -5,6 +5,9 @@ import { config } from "@/config";
 import type { Generate } from "./create";
 import { GEN_SYSTEM, GenOutputSchema, genMessage } from "./prompt";
 
+/** 비용 계산용 단가(Opus 5.5, 백만 토큰당 달러) */
+export const PRICE_PER_MTOK = { input: 4, output: 20 };
+
 export const claudeGenerate: Generate = async (items) => {
   const client = new Anthropic();
   const res = await client.messages.parse(
@@ -20,6 +23,5 @@ export const claudeGenerate: Generate = async (items) => {
   if (res.stop_reason !== "end_turn" || !res.parsed_output) {
     throw new Error(`응답이 끝나지 않음(stop_reason=${res.stop_reason})`);
   }
-  console.log(`[카드 생성] ${config.genModel} 입력 ${res.usage.input_tokens} / 출력 ${res.usage.output_tokens} 토큰`);
-  return res.parsed_output.cards;
+  return { cards: res.parsed_output.cards, usage: { inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens } };
 };

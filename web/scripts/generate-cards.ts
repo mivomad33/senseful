@@ -2,15 +2,15 @@
 // 사용: npm run cards:generate -- <장수> [--level a1|a2|b1|b2|c1] [--dev]
 // - 장수는 이번 실행에서 새로 만들 장수다. 원격에서 카드가 없는 항목만 고르므로 끊긴 뒤 다시 실행해도 만든 카드를 다시 만들지 않는다.
 // - 레벨을 주면 그 레벨에서만 고르고, 모자라면 있는 만큼만 만든다. 없으면 가장 낮은 레벨부터 고른다.
-// - 카드 내용에 원문 문자열·금지 문자열이 들어가면 실패로 보고 한 번 다시 생성한다.
+// - 카드 내용에 뜻풀이 원문이 그대로 들어가면 실패로 보고 한 번 다시 생성한다. 금지 문자열(출처 표시)은 카드에서 보지 않는다.
 // 운영 DB(기본)면 먼저 백업한다. 생성 모델과 프롬프트는 앱 설정과 같다(Opus 5.5, high).
 import "./env";
 import { config } from "@/config";
 import { openDb } from "@/db";
 import { claudeGenerate, PRICE_PER_MTOK } from "@/lib/card-gen/claude";
-import { BATCH_SIZE, createCards, type LeakCheck } from "@/lib/card-gen/create";
+import { BATCH_SIZE, createCards, sourceLeak } from "@/lib/card-gen/create";
 import { LEVELS, type Level } from "@/lib/study/schedule";
-import { loadBasis, scanText } from "./checks/basis";
+import { loadSources } from "./checks/basis";
 import { loadGenInputs, openLocal } from "./lib/local-db";
 import { backupBeforeChange, target } from "./lib/target";
 
@@ -29,11 +29,7 @@ const cost = (u: { inputTokens: number; outputTokens: number }) => (u.inputToken
 async function main() {
   const { n, level } = args();
   if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY가 없습니다(web/.env.local)");
-  const basis = loadBasis();
-  const leak: LeakCheck = (c) => {
-    const s = scanText([c.sense_ko, c.example_en, c.example_ko].join("\n"), basis);
-    return s.forbidden || s.source ? "금지된 내용(원문 또는 금지 문자열)이 들어 있음" : null;
-  };
+  const leak = sourceLeak(loadSources());
   const t = target();
   console.log(`${t.name} DB에 카드 ${n}장을 만듭니다${level ? `(${level.toUpperCase()}만)` : ""}. 모델 ${config.genModel}, ${BATCH_SIZE}장씩.`);
   await backupBeforeChange(t);

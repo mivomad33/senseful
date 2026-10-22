@@ -59,7 +59,8 @@ function need(file: string): void {
 }
 
 /** 수집 DB의 긴 원문 문자열. 표제어 안에 그대로 들어 있는 것은 빼다(표제어는 공개해도 되는 값이다). */
-function loadSources(): string[] {
+export function loadSources(): string[] {
+  need(LOCAL_DB);
   const db = new Database(LOCAL_DB, { readonly: true, fileMustExist: true });
   try {
     const defs = db.prepare("select distinct definition d from items where length(definition) >= ?").all(MIN_SOURCE_LEN) as { d: string }[];

@@ -18,8 +18,19 @@ export type Generate = (items: GenItem[]) => Promise<{ cards: GenCard[]; usage: 
 /** 원격 항목 id로 생성 입력을 찾는다(로컬 수집 DB). 없는 id는 빠진다. */
 export type LoadInputs = (ids: number[]) => Map<number, GenItem>;
 
-/** 생성된 카드 내용에 들어가면 안 되는 것이 있는지(원문 문자열, 금지 문자열). 있으면 이유를 돌려준다. */
+/** 생성된 카드 내용에 들어가면 안 되는 것(뜻풀이 원문)이 있는지. 있으면 이유를 돌려준다. */
 export type LeakCheck = (card: GenCard) => string | null;
+
+/**
+ * 카드 내용(한국어 뜻, 예문, 번역)에 뜻풀이 원문이 그대로 들어 있는지 보는 검사.
+ * 금지 문자열(출처 표시)은 보지 않는다. 생성 입력에 출처 정보가 없어 예문의 지명 같은 일반 단어만 걸리기 때문이다.
+ */
+export function sourceLeak(sources: string[]): LeakCheck {
+  return (c) => {
+    const text = [c.sense_ko, c.example_en, c.example_ko].join("\n");
+    return sources.some((s) => text.includes(s)) ? "뜻풀이 원문이 들어 있음" : null;
+  };
+}
 
 export interface CreateResult {
   created: number;
@@ -44,16 +55,20 @@ export async function pickItems(db: Db, n: number, level?: Level): Promise<ItemR
   return rows.map((r) => r.item);
 }
 
+/** 실패 이유. leak은 원문 검사에 걸린 것으로, 같은 실행에서 다시 생성한다. */
+type Failure = { reason: string; leak?: boolean };
+
 /** 응답에서 항목 번호마다 쓸 수 있는 카드를 찾는다. 없으면 실패 이유를 둔다. */
-function matchCards(n: number, out: GenCard[], leak: LeakCheck): (GenCard | string)[] {
+function matchCards(n: number, out: GenCard[], leak: LeakCheck): (GenCard | Failure)[] {
   return Array.from({ length: n }, (_, i) => {
     const found = out.filter((c) => c.id === i);
-    if (found.length === 0) return "응답에 없음";
-    if (found.length > 1) return "응답에 같은 번호가 여러 번 나옴";
+    if (found.length === 0) return { reason: "응답에 없음" };
+    if (found.length > 1) return { reason: "응답에 같은 번호가 여러 번 나옴" };
     const c = { ...found[0], sense_ko: found[0].sense_ko?.trim(), example_en: found[0].example_en?.trim(), example_ko: found[0].example_ko?.trim() };
     const empty = (["sense_ko", "example_en", "example_ko"] as const).filter((f) => !c[f]);
-    if (empty.length) return `빈 필드(${empty.join(", ")})`;
-    return leak(c) ?? c;
+    if (empty.length) return { reason: `빈 필드(${empty.join(", ")})` };
+    const why = leak(c);
+    return why ? { reason: why, leak: true } : c;
   });
 }
 
@@ -61,7 +76,7 @@ export const BATCH_SIZE = 20;
 
 export interface CreateOptions {
   level?: Level;
-  /** 원문·금지 문자열 때문에 실패한 항목을 같은 실행에서 다시 생성하는 횟수 */
+  /** 원문 검사에 걸려 실패한 항목을 같은 실행에서 다시 생성하는 횟수 */
   leakRetries?: number;
   onBatch?: (done: number, total: number, r: CreateResult) => void;
   now?: Date;
@@ -85,25 +100,25 @@ export async function createCards(db: Db, generate: Generate, loadInputs: LoadIn
       return false;
     });
 
-    let results: (GenCard | string)[];
+    let results: (GenCard | Failure)[];
     try {
       const out = await generate(usable.map((b) => inputs.get(b.it.id)!));
       result.usage.inputTokens += out.usage.inputTokens;
       result.usage.outputTokens += out.usage.outputTokens;
       results = matchCards(usable.length, out.cards, leak);
     } catch (e) {
-      results = usable.map(() => `생성 호출 실패: ${(e as Error).message}`);
+      results = usable.map(() => ({ reason: `생성 호출 실패: ${(e as Error).message}` }));
     }
 
     const rows: (typeof cards.$inferInsert)[] = [];
     usable.forEach((b, i) => {
       const r = results[i];
-      if (typeof r !== "string") {
+      if (!("reason" in r)) {
         rows.push({ itemId: b.it.id, senseKo: r.sense_ko, exampleEn: r.example_en, exampleKo: r.example_ko, createdAt: now, updatedAt: now });
-      } else if (r.startsWith("금지") && b.tries < (opts.leakRetries ?? 1)) {
+      } else if (r.leak && b.tries < (opts.leakRetries ?? 1)) {
         queue.push({ it: b.it, tries: b.tries + 1 }); // 다시 생성한다
       } else {
-        result.failed.push({ itemId: b.it.id, headword: b.it.headword, reason: r });
+        result.failed.push({ itemId: b.it.id, headword: b.it.headword, reason: r.reason });
       }
     });
 

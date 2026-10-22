@@ -85,14 +85,14 @@ test("생성 호출이 실패하면 아무것도 저장하지 않고, 실패한 
   assert.equal((await pickItems(db, 10)).length, 3);
 });
 
-test("원문·금지 문자열이 든 카드는 실패로 보고 다시 생성하며, 다시 실패하면 저장하지 않는다", async () => {
+test("원문 검사에 걸린 카드는 실패로 보고 다시 생성하며, 다시 실패하면 저장하지 않는다", async () => {
   for (let i = 0; i < 2; i++) await addItem(`w${i}`);
   let calls = 0;
   const leaky: Generate = async (its) => {
     calls++;
     return { cards: its.map((_, i) => ({ id: i, sense_ko: "뜻", example_en: calls === 1 && i === 0 ? "LEAK here." : "Clean.", example_ko: "예문." })), usage: { inputTokens: 1, outputTokens: 1 } };
   };
-  const leak: LeakCheck = (c) => (c.example_en.includes("LEAK") ? "금지된 내용이 들어 있음" : null);
+  const leak: LeakCheck = (c) => (c.example_en.includes("LEAK") ? "뜻풀이 원문이 들어 있음" : null);
   const r = await createCards(db, leaky, load, leak, 2);
   assert.equal(calls, 2); // 걸린 항목만 다시 생성
   assert.equal(r.created, 2);
@@ -103,5 +103,5 @@ test("원문·금지 문자열이 든 카드는 실패로 보고 다시 생성�
   const always: Generate = async (its) => ({ cards: its.map((_, i) => ({ id: i, sense_ko: "뜻", example_en: "LEAK.", example_ko: "예문." })), usage: { inputTokens: 1, outputTokens: 1 } });
   const r2 = await createCards(db, always, load, leak, 1);
   assert.equal(r2.created, 0);
-  assert.equal(r2.failed[0].reason, "금지된 내용이 들어 있음");
+  assert.equal(r2.failed[0].reason, "뜻풀이 원문이 들어 있음");
 });

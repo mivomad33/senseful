@@ -24,6 +24,7 @@ mock.module("next/navigation", {
   },
 });
 mock.module("next/cache", { exports: { refresh: () => {} } });
+mock.module("next/server", { exports: { connection: async () => {} } });
 
 type Actions = Record<string, (...a: unknown[]) => Promise<unknown>>;
 let modules: { name: string; mod: Actions; admin: string[] }[];

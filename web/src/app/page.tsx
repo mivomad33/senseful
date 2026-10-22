@@ -6,7 +6,7 @@ import { buttonStyles } from "@/components/button";
 import { Footer } from "@/components/footer";
 import { Badge, Card, Logo } from "@/components/ui";
 import { SITE_URL } from "@/config";
-import { DESCRIPTION, publicPage } from "@/lib/meta";
+import { absoluteUrl, DESCRIPTION, publicPage } from "@/lib/meta";
 import { FLOW_ANSWER, FLOW_SENSES } from "./_landing/content";
 import { DemoCard } from "./_landing/demo";
 import { LoginError } from "./_landing/login-error";
@@ -74,6 +74,9 @@ const mini = "overflow-hidden rounded-[14px] bg-surface shadow-card";
 export default function Landing() {
   return (
     <>
+      {/* 첫 화면 주소는 끝에 /를 붙여 그대로 둔다(React가 <head>로 옮긴다). */}
+      <link rel="canonical" href={absoluteUrl("/")} />
+      <meta property="og:url" content={absoluteUrl("/")} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <div className="mx-auto w-full max-w-[1040px] px-4 pt-[18px] pb-9 min-[421px]:px-5 min-[421px]:pt-6 min-[421px]:pb-12">
         <div className="flex items-center justify-between">

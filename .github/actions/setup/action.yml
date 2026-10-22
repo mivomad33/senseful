@@ -1,0 +1,14 @@
+name: 준비
+description: Node(.nvmrc)를 설치하고 web/의 의존성을 lockfile 그대로 설치한다(npm 캐시 사용).
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+        cache-dependency-path: web/package-lock.json
+    - name: 의존성 설치
+      shell: bash
+      working-directory: web
+      run: npm ci

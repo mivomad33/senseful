@@ -24,7 +24,10 @@
     "db:import-local": "tsx scripts/import-local.ts",
     "db:reset-progress": "tsx scripts/reset-progress.ts",
     "cards:generate": "tsx scripts/generate-cards.ts",
-    "test:e2e": "tsx test/e2e/run.ts"
+    "test:e2e": "tsx test/e2e/run.ts",
+    "deploy": "tsx scripts/deploy.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "check:output": "tsx scripts/checks/output-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

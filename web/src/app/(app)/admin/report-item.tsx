@@ -30,7 +30,7 @@ export function ReportItem({ report }: { report: ReportRow }) {
     });
   };
   const toggleExclude = () => {
-    if (!card.excluded && !window.confirm("이 카드를 모든 사용자에게서 뺄까요?")) return;
+    if (!card.excluded && !window.confirm("이 카드를 모든 사용자에게서 빼시겠습니까?")) return;
     start(async () => {
       await (card.excluded ? unremoveCard : removeCard)(card.id);
       setCard({ ...card, excluded: !card.excluded });

@@ -19,6 +19,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function Privacy() {
   return (
+    <>
     <main className="mx-auto flex w-full max-w-[720px] flex-1 flex-col gap-4 px-4 py-8 sm:py-10">
       <header className="px-1 pb-2">
         <Link href="/" aria-label="Senseful 처음으로">
@@ -70,7 +71,8 @@ export default function Privacy() {
           </p>
         </Section>
       </Card>
-      <Footer className="mt-4 pb-4" />
     </main>
+    <Footer className="px-4 pt-2 pb-8" />
+    </>
   );
 }

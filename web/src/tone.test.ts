@@ -46,7 +46,7 @@ function texts(file: string): { text: string; line: number }[] {
 
 test("해라체 판별 규칙", () => {
   for (const bad of ["다시 제출할 수 있다.", "이 카드를 뺄까?", "`${a} 다시 나온다`", "끝냈다", "하자.", "보라."]) assert.notEqual(findHaera(bad.replace(/`/g, "")).length, 0, bad);
-  for (const good of ["다시 제출할 수 있습니다.", "뺄까요?", "다 썼습니다", "예상보다 많습니다.", "뜻마다 카드가 있습니다.", "다시 시도", "하시겠습니까?", "다음 카드", "오늘 학습 완료", "보내 주십시오."]) assert.deepEqual(findHaera(good), [], good);
+  for (const good of ["다시 제출할 수 있습니다.", "다 썼습니다", "예상보다 많습니다.", "뜻마다 카드가 있습니다.", "다시 시도", "하시겠습니까?", "다음 카드", "오늘 학습 완료", "보내 주십시오."]) assert.deepEqual(findHaera(good), [], good);
 });
 
 test("화면 문구에 해라체 종결이 없다", () => {

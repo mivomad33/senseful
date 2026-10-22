@@ -137,7 +137,7 @@ function ReportForm({ cardId, onDone, onCancel }: { cardId: number; onDone: () =
   return (
     <form onSubmit={send} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-semibold text-muted">어떤 점이 틀렸나요? (선택, {REPORT_MAX}자까지)</span>
+        <span className="text-xs font-semibold text-muted">어떤 점이 틀렸습니까? (선택, {REPORT_MAX}자까지)</span>
         <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={REPORT_MAX} rows={3} disabled={pending} className={`${field} resize-none text-base`} />
       </label>
       {error && (
@@ -319,7 +319,7 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
     });
 
   const exclude = () => {
-    const ask = isAdmin ? "이 카드를 모든 사용자에게서 뺄까요? 다시 만들어지지도 않습니다." : "이 카드를 뺄까요? 나에게만 다시 나오지 않습니다.";
+    const ask = isAdmin ? "이 카드를 모든 사용자에게서 빼시겠습니까? 다시 만들어지지도 않습니다." : "이 카드를 빼시겠습니까? 나에게만 다시 나오지 않습니다.";
     if (!graded || !window.confirm(ask)) return;
     start(async () => {
       await (isAdmin ? removeCard : hideCard)(graded.cardId);

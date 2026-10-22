@@ -98,3 +98,28 @@ test("관리자 화면은 관리자만 들어간다", async ({ page }, info) => 
   await expect(page.getByText("카드 재고")).toBeVisible();
   await noHorizontalScroll(page);
 });
+
+const FEEDBACK = "mailto:mivomad33@gmail.com?subject=" + encodeURIComponent("Senseful 의견");
+
+test("모든 화면 푸터에 의견 보내기 메일 링크가 있고, 설정 화면 아래에도 있다(4.5-8)", async ({ page }) => {
+  const footerLink = async () => expect(page.getByRole("contentinfo").getByRole("link", { name: "의견 보내기" })).toHaveAttribute("href", FEEDBACK);
+  for (const p of ["/", "/privacy"]) {
+    await page.goto(p);
+    await footerLink();
+  }
+  await login(page, "admin");
+  for (const p of ["/home", "/study", "/settings", "/admin"]) {
+    await page.goto(p);
+    await footerLink();
+  }
+  await page.goto("/settings");
+  await expect(page.getByRole("main").getByRole("link", { name: "개발자에게 의견 보내기" })).toHaveAttribute("href", FEEDBACK);
+});
+
+test("로그아웃하면 소개 화면으로 가고, 다시 홈에 들어갈 수 없다(4.1-3)", async ({ page }, info) => {
+  await login(page, userFor(info.project.name, 2));
+  await page.getByRole("button", { name: "로그아웃" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/home");
+  await expect(page).toHaveURL(/\/$/);
+});

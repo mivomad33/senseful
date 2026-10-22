@@ -5,6 +5,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const SESSION_COOKIE = "senseful_session";
+/** lib/auth/session.ts의 SESSION_DAYS와 같다 */
+const SESSION_DAYS = 30;
 const APP_PATHS = ["/home", "/study", "/settings", "/admin"];
 
 export function proxy(req: NextRequest) {
@@ -15,7 +17,15 @@ export function proxy(req: NextRequest) {
     if (pathname.startsWith("/api/auth/") || has) return NextResponse.next();
     return Response.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
-  if (!has && APP_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+  const appPath = APP_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  if (has && appPath) {
+    // DB 세션은 쓸 때마다 늘어나므로(lib/auth/session.ts) 쿠키 만료도 같이 늘린다. 세션이 없으면 화면이 쿠키를 지운다.
+    const res = NextResponse.next();
+    const value = req.cookies.get(SESSION_COOKIE)!.value;
+    res.cookies.set(SESSION_COOKIE, value, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_DAYS * 86_400 });
+    return res;
+  }
+  if (!has && appPath) {
     const res = NextResponse.redirect(new URL("/", req.url));
     res.headers.set("X-Robots-Tag", "noindex");
     return res;

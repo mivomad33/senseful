@@ -5,14 +5,14 @@ description: 자율 구현 명세서(기획·요구사항 문서)를 서브에�
 
 # 자율 구현 명세서 반복 검토
 
-입력은 자율 구현 명세서(줄여서 명세서) 하나다(인자로 받은 명세서 폴더나 `spec.md` 경로. 없으면 사용자가 가리킨 문서). 정의는 아래 기준 파일 맨 앞에, 파일 위치와 목록 규칙은 같은 파일 3.4에 있다.
-이 문서는 AI가 사용자에게 묻지 않고 끝까지 구현할 때 쓰는 것이다(`implement-spec` 스킬이 있으면 그 입력). 그래서 검토의 목적은 하나다. **구현하는 AI가 멈추거나, 사용자가 정할 일을 짐작하거나, 지켜야 할 것을 어기게 되는 곳을 구현 전에 없앤다.**
+입력은 자율 구현 명세서(줄여서 명세서) 하나다(인자로 받은 명세서 폴더나 `spec.md` 경로). 인자가 없으면 `docs/specs/README.md`에서 "검토 대기"인 명세서를 보여 주고 고르게 한다. 정의는 아래 기준 파일 맨 앞에, 파일 위치와 목록 규칙은 같은 파일 3.4에 있다.
+이 문서는 AI가 사용자에게 묻지 않고 끝까지 구현할 때 쓰는 것이다(`implement-spec`의 입력). 그래서 검토의 목적은 하나다. **구현하는 AI가 멈추거나, 사용자가 정할 일을 짐작하거나, 지켜야 할 것을 어기게 되는 곳을 구현 전에 없앤다.**
 
 ## 1. 준비
 
-- 문서 전체, 프로젝트 규칙(CLAUDE.md, 기록 문서 등), 구현 스킬이 있으면 그 스킬을 읽는다.
-- **명세서 기준 파일**을 읽는다. `write-spec` 스킬이 있으면 그 폴더의 `criteria.md`다(이 스킬 폴더 기준 `../write-spec/criteria.md`). 문서가 갖춰야 할 원칙, 구성(필수 요소·고정 제목·권장 순서), 빠뜨리기 쉬운 것, 목록 밖을 찾는 점검이 거기 있고, 서브에이전트도 이 파일로 검사한다. 없으면 이 단계를 건너뛰고 템플릿의 기준 항목(7번)을 뺀다. 8번(따라가 보기)은 기준 파일이 없어도 한다.
-- 문서가 의도적으로 정한 형식을 파악한다. 기준 파일이 있으면 거기 적힌 형식도 의도된 것이다. 서브에이전트가 이것을 문제로 지적하지 않게 지시에 넣기 위해서다.
+- 문서 전체, 프로젝트 규칙(CLAUDE.md, 기록 문서 등), `implement-spec` 스킬(`../implement-spec/SKILL.md`)을 읽는다.
+- **명세서 기준 파일** `../write-spec/criteria.md`(이 스킬 폴더 기준)를 반드시 읽는다. 없으면 시작하지 않고 알린다. 문서가 갖춰야 할 원칙, 구성(필수 요소·고정 제목·권장 순서), 빠뜨리기 쉬운 것, 목록 밖을 찾는 점검이 거기 있고, 서브에이전트도 이 파일로 검사한다.
+- 문서가 의도적으로 정한 형식을 파악한다. 기준 파일에 적힌 형식도 의도된 것이다. 서브에이전트가 이것을 문제로 지적하지 않게 지시에 넣기 위해서다.
   예: 설계·계획을 일부러 쓰지 않음, 요구사항에 우선순위를 두지 않음, 권장 순서와 다르게 절을 묶음, 필수 요소 밖의 절을 더함.
 - 문서의 종류를 파악한다. 기존 시스템을 바꾸는 변경 건인지, 새로 만드는 신규 개발인지에 따라 대조할 것이 다르다. 신규 개발이면 대조할 코드·데이터가 없거나 적은 대신, 기술 선택과 작업 규칙이 문서에 정해져 있어야 한다.
 - 서브에이전트가 대조할 관련 파일(기존 결정 기록, 개요 문서, 시안, 코드, 로컬 데이터 중 있는 것)을 정한다.
@@ -81,7 +81,7 @@ Document: <문서 절대 경로>
 Context:
 - Project: <프로젝트 경로와 한두 줄 설명>
 - Kind: <변경 건(changes an existing system) 또는 신규 개발(new build)>
-- Use: an AI agent will implement everything from this document WITHOUT asking the user after the start<구현 스킬이 있으면: using the skill at <경로>>. The document must contain every human decision and prerequisite.
+- Use: an AI agent will implement everything from this document WITHOUT asking the user after the start, using the skill at <implement-spec 절대 경로>. The document must contain every human decision and prerequisite.
 - Intentional choices — do not flag these: <예: no design/plan section, no priority among requirements>
 - This is review round <N>. Already fixed in earlier rounds: <지금까지 고친 항목 목록, 없으면 "none">. Verify those fixes are correct and consistent; do not re-report them if fine.
 - Related files: <대조할 파일 목록>

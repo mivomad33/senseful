@@ -194,7 +194,7 @@ test("정정하면 최종 판정으로 다시 계산한 일정이 된다", async
       const b = await addCard("b", opts);
       // a는 판정 후 정정하고, b는 처음부터 최종 판정으로 기록한다.
       const first = await answer(a, graded, T0);
-      const fixed = await correctReview(db, u.id, first.logId, final);
+      const fixed = await correctReview(db, u.id, first.logId, final, at(T0, min(1)));
       const direct = await answer(b, final, T0);
       assert.deepEqual(fixed.due, direct.due);
       assert.equal(fixed.state, direct.state);
@@ -214,9 +214,30 @@ test("마지막 기록이 아니거나 다른 사용자의 기록이면 정정�
   const id = await addCard("a");
   const first = await answer(id, false, T0);
   const other = await addUser();
-  await assert.rejects(correctReview(db, other.id, first.logId, true), /복습 기록이 없습니다/);
+  await assert.rejects(correctReview(db, other.id, first.logId, true, at(T0, min(1))), /복습 기록이 없습니다/);
   await answer(id, true, at(T0, min(2)));
-  await assert.rejects(correctReview(db, u.id, first.logId, true), /정정할 수 없습니다/);
+  await assert.rejects(correctReview(db, u.id, first.logId, true, at(T0, min(3))), /뒤에 기록이 있어/);
+});
+
+test("정정은 오늘(새벽 4시 기준) 한 기록만 되고, 지난 기록은 거절하며 상태와 기록을 그대로 둔다(문서 4.2-3)", async () => {
+  // 오늘 한 마지막 기록은 정정된다.
+  const a = await addCard("a");
+  const fa = await answer(a, false, T0);
+  assert.equal((await correctReview(db, u.id, fa.logId, true, at(T0, min(30)))).logId, fa.logId);
+
+  // 어제 한 마지막 기록, 새벽 4시 직전 기록을 4시 뒤에 정정하는 경우는 거절된다.
+  const cases: [Date, Date][] = [
+    [T0, new Date("2026-10-18T12:00:00+09:00")],
+    [new Date("2026-10-18T03:50:00+09:00"), new Date("2026-10-18T04:10:00+09:00")],
+  ];
+  for (const [i, [when, now]] of cases.entries()) {
+    const id = await addCard(`old${i}`);
+    const log = await answer(id, false, when);
+    const before = { card: await state(id), logs: await db.select().from(reviewLogs).where(eq(reviewLogs.id, log.logId)) };
+    await assert.rejects(correctReview(db, u.id, log.logId, true, now, 4), /지난 기록이라 정정할 수 없습니다/);
+    assert.deepEqual(await state(id), before.card);
+    assert.deepEqual(await db.select().from(reviewLogs).where(eq(reviewLogs.id, log.logId)), before.logs);
+  }
 });
 
 test("기다리지 않고 바로 보기면 가장 빨리 돌아올 다시 볼 카드를 바로 낸다", async () => {

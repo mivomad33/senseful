@@ -11,7 +11,26 @@ export const PAGE_TITLES: Record<string, string> = {
 /** 반드시 있어야 하는 공개 페이지 */
 export const PUBLIC_PATHS = Object.keys(PAGE_TITLES);
 
-export const ROBOTS_TXT = ["User-Agent: *", "Allow: /", "Disallow: /home", "Disallow: /study", "Disallow: /settings", "Disallow: /admin", "Disallow: /api/", "", `Sitemap: ${SITE_URL}/sitemap.xml`];
+/** 검색엔진 소유 확인 값. 앱 코드(src/lib/meta.ts)와 따로 적어 두어, 앱 쪽 값이 바뀌거나 빠지면 검사가 잡는다(문서 4.3-1). */
+const VERIFY = {
+  google: "mhxcHCnGlus8pgaYc_t7hBGoj3cvPOkED1D6dSxu30M",
+  naver: "85320c79702589f9512228180691795f115237cb",
+  daum: "#DaumWebMasterTool:df76102471373e7339279cf70da708189f345bb1b212504c5755bbe078c52675:WoYFtMaR84eZ7MaX1Xjw9A==",
+};
+
+export const ROBOTS_TXT = [
+  "User-Agent: *",
+  "Allow: /",
+  "Disallow: /home",
+  "Disallow: /study",
+  "Disallow: /settings",
+  "Disallow: /admin",
+  "Disallow: /api/",
+  "",
+  `Sitemap: ${SITE_URL}/sitemap.xml`,
+  "",
+  VERIFY.daum,
+];
 export const SITEMAP_URLS = [`${SITE_URL}/`, `${SITE_URL}/privacy`];
 
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
@@ -66,6 +85,11 @@ export function checkPublicPage(html: string, path: string): string[] {
   once("twitter:card", values(html, "meta", "name", "twitter:card", "content"), "summary_large_image");
   const icons = iconHrefs(html).map((h) => h.split("?")[0]);
   for (const need of ["/favicon.ico", "/icon.svg", "/apple-icon.png"]) if (!icons.includes(need)) bad.push(`아이콘 링크 ${need}가 없습니다`);
+  // 검색엔진 소유 확인은 첫 화면만 본다.
+  if (path === "/") {
+    once("google-site-verification", values(html, "meta", "name", "google-site-verification", "content"), VERIFY.google);
+    once("naver-site-verification", values(html, "meta", "name", "naver-site-verification", "content"), VERIFY.naver);
+  }
   return bad;
 }
 

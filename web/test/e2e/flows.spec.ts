@@ -71,7 +71,8 @@ test("설정 바꾸기(하루 새 카드 수, 레벨 제외) → 홈에 반영",
   await expect(page.getByText("저장했습니다")).toBeVisible();
   await noHorizontalScroll(page);
   await page.goto("/home");
-  const tile = page.locator("div", { has: page.getByText("새 카드", { exact: true }) }).last();
+  // "오늘의 학습" 타일. 학습 기록 표에도 "새 카드" 줄이 있고 두 카드가 따로 로딩되므로, 화면 순서상 첫 번째(타일)의 상자를 본다.
+  const tile = page.getByText("새 카드", { exact: true }).first().locator("..");
   await expect(tile).toContainText("5");
   await expect(page.getByText("제외", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: /학습 시작/ }).click();

@@ -31,7 +31,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
-    "arctic": "^3.7.0",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.2",
     "pg": "^8.23.1",

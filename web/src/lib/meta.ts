@@ -5,6 +5,16 @@ import { SITE_URL } from "@/config";
 export const DESCRIPTION = "영단어를 뜻 하나씩 예문 번역으로 익히는 학습 앱입니다. 예문을 번역하면 AI가 맞았는지 판정하고, 복습 날짜는 알아서 잡아 드립니다.";
 export const OG_IMAGE = { url: "/og.png", width: 1200, height: 630, alt: "Senseful 소개 이미지: 예문을 번역하면 AI가 맞았는지 판정하는 학습 카드" };
 
+/**
+ * 검색엔진 소유 확인 값(Google Search Console, 네이버 서치어드바이저, 다음 웹마스터도구). 원래 페이지에 공개되는 값이다.
+ * Google·네이버는 첫 화면 <meta>로, 다음은 robots.txt 맨 아래 줄로 확인한다. Bing은 Search Console에서 가져와 값이 없다.
+ */
+export const SITE_VERIFICATION = {
+  google: "mhxcHCnGlus8pgaYc_t7hBGoj3cvPOkED1D6dSxu30M",
+  naver: "85320c79702589f9512228180691795f115237cb",
+  daumRobotsLine: "#DaumWebMasterTool:df76102471373e7339279cf70da708189f345bb1b212504c5755bbe078c52675:WoYFtMaR84eZ7MaX1Xjw9A==",
+};
+
 /** 링크 미리보기. 하위 페이지가 openGraph를 정하면 통째로 바뀌므로(얕은 병합) 페이지마다 전체를 만든다. */
 /** 페이지의 절대 주소. 첫 화면은 끝에 /를 붙인 https://senseful.vercel.app/ 이다. */
 export const absoluteUrl = (path: string) => (path === "/" ? `${SITE_URL}/` : `${SITE_URL}${path}`);
@@ -18,7 +28,13 @@ export function openGraph(path: string): Metadata["openGraph"] {
  * Next는 첫 화면 주소의 끝 /를 지우므로, 첫 화면의 canonical과 og:url은 페이지에서 <RootUrlTags />로 직접 넣는다.
  */
 export function publicPage(path: string, title: string): Metadata {
-  if (path === "/") return { title, description: DESCRIPTION, openGraph: { ...openGraph(path), url: undefined } };
+  if (path === "/")
+    return {
+      title,
+      description: DESCRIPTION,
+      openGraph: { ...openGraph(path), url: undefined },
+      verification: { google: SITE_VERIFICATION.google, other: { "naver-site-verification": SITE_VERIFICATION.naver } },
+    };
   return { title, description: DESCRIPTION, alternates: { canonical: absoluteUrl(path) }, openGraph: openGraph(path) };
 }
 

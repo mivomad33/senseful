@@ -205,6 +205,9 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
   const [panel, setPanel] = useState<"edit" | "report" | null>(null);
   const [reported, setReported] = useState(false);
   const [excluded, setExcluded] = useState(false);
+  // 방금 낸 카드가 오늘 대기열 밖이어서 판정하지 않고 넘어갔는지(새벽 4시를 넘겨 띄워 둔 카드 등). 다음 제출 때 지운다.
+  const [skipped, setSkipped] = useState(false);
+  const [correctError, setCorrectError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const nextRef = useRef<HTMLButtonElement>(null);
 
@@ -216,6 +219,7 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
       setExcluded(false);
       setAnswer("");
       setError(null);
+      setCorrectError(null);
       setView(await getNext(aheadNow));
     });
 
@@ -258,11 +262,17 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
   }, [graded, panel]);
 
   const noNew = view.counts.newTotal === 0 && <NoNewCardsNotice />;
+  const skippedNotice = skipped && (
+    <p role="status" className="px-1 text-sm text-muted">
+      방금 카드는 지금 학습할 카드가 아니어서 판정하지 않고 넘어갔습니다.
+    </p>
+  );
 
   if (view.status === "done") {
     return (
       <>
         <Progress counts={view.counts} />
+        {skippedNotice}
         <Card className="flex flex-col gap-5 p-6 sm:p-8">
           <h1 className="text-2xl font-extrabold">오늘 학습 완료</h1>
           <p className="-mt-2 text-sm text-muted">
@@ -285,6 +295,7 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
     return (
       <>
         <Progress counts={view.counts} />
+        {skippedNotice}
         <Card className="flex flex-col gap-5 p-6 sm:p-8">
           <p className="text-lg font-bold">{waitingText(view.until)}</p>
           <p className="text-muted">이 화면을 열어 두면 그때 이어서 나옵니다.</p>
@@ -304,9 +315,13 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
     start(async () => {
       setError(null);
       setLimit(null);
+      setSkipped(false);
       const r = await submitAnswer(view.cardId, answer);
       if (r.ok) setGraded(r.graded);
-      else if ("limit" in r) setLimit(r);
+      else if ("outside" in r) {
+        setSkipped(true);
+        loadNext();
+      } else if ("limit" in r) setLimit(r);
       else setError(r.error);
     });
   };
@@ -314,8 +329,10 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
   const correct = () =>
     start(async () => {
       if (!graded) return;
+      setCorrectError(null);
       const r = await correctGrade(graded.logId, !graded.isCorrect);
-      setGraded({ ...graded, ...r });
+      if (r.ok) setGraded({ ...graded, isCorrect: r.isCorrect, due: r.due });
+      else setCorrectError(r.error);
     });
 
   const exclude = () => {
@@ -339,6 +356,7 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
     return (
       <>
         <Progress counts={view.counts} />
+        {skippedNotice}
         <Card className="flex min-h-[380px] flex-col gap-6 p-5 sm:min-h-[460px] sm:p-9">
           <div className="flex gap-2">
             <Badge tone={view.kind === "new" ? "violet" : view.kind === "review" ? "blue" : "plain"}>{KIND_LABEL[view.kind]}</Badge>
@@ -475,6 +493,11 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
           )}
         </div>
       </Card>
+      {correctError && (
+        <p role="alert" className="px-1 text-sm text-orange-ink">
+          {correctError}
+        </p>
+      )}
       {!panel && (
         <div className="flex gap-3">
           {!excluded && (

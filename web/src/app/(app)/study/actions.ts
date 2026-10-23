@@ -69,6 +69,8 @@ export interface Graded {
 export type SubmitState =
   | { ok: true; graded: Graded }
   | { ok: false; error: string }
+  /** 그 카드가 지금 오늘 대기열에 없어 판정하지 않았다. 화면은 안내하고 다음 카드로 넘어간다 */
+  | { ok: false; outside: true }
   | { ok: false; limit: "user" | "total"; perUser: number; dayStartHour: number };
 
 export async function submitAnswer(cardId: number, answer: string): Promise<SubmitState> {
@@ -76,7 +78,8 @@ export async function submitAnswer(cardId: number, answer: string): Promise<Subm
   const grade = appGrader();
   if (!grade) return { ok: false, error: "판정 설정이 없어 판정할 수 없습니다(ANTHROPIC_API_KEY)." };
   try {
-    const r = await gradeAndRecord(db, grade, { userId: u.id, isAdmin: u.isAdmin }, cardId, String(answer));
+    const r = await gradeAndRecord(db, grade, { user: studyUser(u), isAdmin: u.isAdmin }, cardId, String(answer));
+    if (r.status === "outside") return { ok: false, outside: true };
     if (r.status === "limit") return { ok: false, limit: r.scope, perUser: config.gradeLimitPerUser, dayStartHour: config.dayStartHour };
     return {
       ok: true,
@@ -87,10 +90,17 @@ export async function submitAnswer(cardId: number, answer: string): Promise<Subm
   }
 }
 
-export async function correctGrade(logId: number, isCorrect: boolean): Promise<{ isCorrect: boolean; due: number }> {
+export type CorrectState = { ok: true; isCorrect: boolean; due: number } | { ok: false; error: string };
+
+/** 판정 정정. 오늘 한 그 카드의 마지막 기록만 된다. 안 되면 화면이 안내로 보여 줄 결과를 돌려준다. */
+export async function correctGrade(logId: number, isCorrect: boolean): Promise<CorrectState> {
   const u = await actionUser();
-  const r = await correctReview(db, u.id, logId, isCorrect);
-  return { isCorrect, due: r.due.getTime() };
+  try {
+    const r = await correctReview(db, u.id, logId, isCorrect);
+    return { ok: true, isCorrect, due: r.due.getTime() };
+  } catch (e) {
+    return { ok: false, error: userError(e, "정정") };
+  }
 }
 
 export type EditState = { ok: true; content: CardContent } | { ok: false; error: string };

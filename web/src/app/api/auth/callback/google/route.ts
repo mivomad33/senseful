@@ -1,18 +1,9 @@
 // 구글 로그인 콜백. 인가 코드를 토큰으로 바꾸고 사용자를 찾거나 만든 뒤 세션을 만든다.
-import { decodeIdToken } from "arctic";
 import { cookies } from "next/headers";
 import { db } from "@/db";
-import { google, ORIGIN, STATE_COOKIE, VERIFIER_COOKIE } from "@/lib/auth/google";
+import { exchangeCode, ORIGIN, readIdToken, STATE_COOKIE, VERIFIER_COOKIE } from "@/lib/auth/google";
 import { cookieOptions, createSession, SESSION_COOKIE } from "@/lib/auth/session";
 import { findOrCreateGoogleUser } from "@/lib/auth/users";
-
-interface Claims {
-  sub: string;
-  email: string;
-  email_verified?: boolean;
-  name?: string;
-  picture?: string;
-}
 
 const fail = () => Response.redirect(`${ORIGIN}/?error=login`, 302);
 
@@ -27,8 +18,7 @@ export async function GET(request: Request): Promise<Response> {
   jar.delete(VERIFIER_COOKIE);
   if (!code || !state || !saved || !verifier || state !== saved) return fail();
   try {
-    const tokens = await google().validateAuthorizationCode(code, verifier);
-    const c = decodeIdToken(tokens.idToken()) as Claims;
+    const c = readIdToken(await exchangeCode(code, verifier));
     const user = await findOrCreateGoogleUser(db, { sub: c.sub, email: c.email, emailVerified: c.email_verified === true, name: c.name, picture: c.picture });
     const s = await createSession(db, user.id);
     jar.set(SESSION_COOKIE, s.token, cookieOptions(s.expiresAt));

@@ -241,6 +241,15 @@ export async function nextCard(db: Db, user: StudyUser, now = new Date(), limits
   return { status: "done", queue };
 }
 
+/**
+ * 그 카드가 지금 그 사용자의 오늘 대기열(지금 낼 카드와 다시 볼 대기 카드)에 있는지.
+ * 답안 제출은 이 대기열 안의 카드만 받는다. 예정일 전 복습 카드, 나만 뺀 카드, 제외한 레벨·상한을 넘은·형제 카드로 미룬 새 카드는 밖이다.
+ */
+export async function inTodayQueue(db: Db, user: StudyUser, cardId: number, now = new Date(), limits: StudyLimits = config): Promise<boolean> {
+  const { ready, waiting } = await todayQueue(db, user, now, limits);
+  return ready.some((c) => c.card.id === cardId) || waiting.some((c) => c.card.id === cardId);
+}
+
 type FsrsFields = Omit<UserCardRow, "userId" | "cardId" | "excludedAt">;
 
 const toFsrs = (c: FsrsFields): FsrsCard => ({
@@ -356,14 +365,17 @@ export async function recordReview(db: Db, userId: number, input: ReviewInput, n
 /**
  * 판정 정정. 그 기록 직전 상태로 되돌린 뒤 최종 판정으로 같은 시각에 다시 적용한다.
  * 그 사용자의 그 카드 마지막 기록만 정정할 수 있다(뒤에 기록이 있으면 그 기록들이 이 판정을 전제로 계산됐기 때문이다).
+ * 오늘(하루가 바뀌는 시각 기준) 한 기록만 정정할 수 있다. 화면은 판정 직후에만 정정을 보여 주므로, 지난 기록 정정은 일정을 바꾸는 조작으로 본다.
  */
-export async function correctReview(db: Db, userId: number, logId: number, isCorrect: boolean): Promise<ReviewResult> {
+export async function correctReview(db: Db, userId: number, logId: number, isCorrect: boolean, now = new Date(), dayStartHour = config.dayStartHour): Promise<ReviewResult> {
   return db.transaction(async (tx) => {
     const [log] = await tx
       .select()
       .from(reviewLogs)
       .where(and(eq(reviewLogs.id, logId), eq(reviewLogs.userId, userId)));
     if (!log) throw new StudyError("복습 기록이 없습니다.");
+    const { start, end } = dayRange(now, dayStartHour);
+    if (log.reviewedAt < start || log.reviewedAt >= end) throw new StudyError("지난 기록이라 정정할 수 없습니다. 판정은 그날 안에만 정정할 수 있습니다.");
     const [row] = await tx
       .select()
       .from(userCards)

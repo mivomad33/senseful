@@ -66,7 +66,7 @@ async function main() {
     if (r.status !== 200) return [`상태 ${r.status}`];
     const got = md5(Buffer.from(await r.arrayBuffer()));
     const want = md5(fs.readFileSync(path.join(WEB, "public/og.png")));
-    const confirmed = path.join(WEB, "../docs/changes/2026-10-public-deploy-landing/og/og.png");
+    const confirmed = path.join(WEB, "../docs/specs/2026-10-public-deploy/design/og/og.png");
     const bad = got === want ? [] : ["public/og.png와 다릅니다"];
     if (fs.existsSync(confirmed) && md5(fs.readFileSync(confirmed)) !== got) bad.push("확정 이미지와 다릅니다");
     return bad;

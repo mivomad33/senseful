@@ -7,9 +7,10 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { runCoverage, runMeasure, runPick, runSave, runWords, type Paths } from "./cli";
 import { parseFile } from "./draft";
-import { FIXTURE_ENTRIES, fixtureLexicon } from "./fixture";
+import { FIXTURE_ENTRIES, fixtureLexicon, storyChapters, storyText } from "./fixture";
 import { parseExceptions } from "./lexicon";
 import { measure } from "./measure";
+import { recordPick } from "./picks";
 import { InputError } from "./rules";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reading-test-"));
@@ -25,7 +26,7 @@ function makePaths(name: string, exceptions = ""): Paths {
   ins.run("phrase", "zebra crossing", "a1"); // 단어가 아닌 항목은 쓰지 않는다
   db.close();
   fs.writeFileSync(path.join(dir, "exceptions.txt"), exceptions);
-  return { db: path.join(dir, "words.sqlite"), exceptions: path.join(dir, "exceptions.txt"), readings: path.join(dir, "readings") };
+  return { db: path.join(dir, "words.sqlite"), exceptions: path.join(dir, "exceptions.txt"), readings: path.join(dir, "readings"), picks: path.join(dir, "picks") };
 }
 
 function capture() {
@@ -193,31 +194,88 @@ test("덮기 현황 명령: 레벨마다 덮인 수를 내고, 저장한 글을 
   assert.match(noDb.err.join(), /단어 DB가 없습니다/);
 });
 
-test("단어 뽑기 명령: 덮이지 않은 단어만, 같은 시드면 같게", () => {
+test("단어 뽑기 명령: 덮이지 않은 단어만, 같은 시드면 같게 뽑고, 뽑기 기록을 남긴다", () => {
   const p = makePaths("pick");
+  const now = new Date("2026-10-24T03:00:00Z");
   const a = capture();
-  assert.equal(runPick(["a2", "--seed", "3", "--json"], a.io, p), 0);
-  const words = JSON.parse(a.out.join(""));
-  assert.deepEqual([...words].sort(), ["colour", "ice", "rise", "unfortunately"]); // 4개뿐이라 모두
+  assert.equal(runPick(["a2", "--seed", "3", "--json"], a.io, p, now), 0);
+  const j = JSON.parse(a.out.join(""));
+  assert.deepEqual(j.words, ["colour", "ice", "rise", "unfortunately"]); // 남은 것이 4개뿐이라(뽑는 수 180보다 적다) 모두
+  assert.equal(j.count, 4);
+  const rec = JSON.parse(fs.readFileSync(path.join(p.picks, `${j.pick_id}.json`), "utf8"));
+  assert.deepEqual([rec.id, rec.level, rec.words], [j.pick_id, "a2", j.words]); // 기록도 남은 단어 모두
   const again = capture();
-  runPick(["a2", "--seed", "3", "--json"], again.io, p);
-  assert.deepEqual(JSON.parse(again.out.join("")), words);
+  runPick(["a2", "--seed", "3", "--json"], again.io, p, now);
+  const k = JSON.parse(again.out.join(""));
+  assert.deepEqual(k.words, j.words);
+  assert.notEqual(k.pick_id, j.pick_id); // 뽑을 때마다 새 ID
+  const text = capture();
+  runPick(["a2"], text.io, p, now);
+  assert.match(text.out.join(), /^pick_id: a2-\d{14}-[0-9a-f]{4}\ncolour\nice/);
   assert.equal(runPick(["x1"], capture().io, p), 2);
 });
 
-test("측정·저장 명령은 이야기 초안(kind: story)을 장마다 재고 저장한다", () => {
+test("측정·저장 명령은 이야기 초안(kind: story)을 장마다 재고, 넘긴 단어를 뽑기 기록과 대조해 저장한다", () => {
   const p = makePaths("story-cli");
-  const body = Array(7).fill(known.join(" ")).join(" ");
-  const chapters = Array.from({ length: 6 }, () => `## The Cat Day\n\n${body}.`).join("\n\n");
-  const text = `---\ntitle: Cat Days\nkind: story\nlevel: a1\nsummary: a cat\nrevisions:\n${"  - 0\n".repeat(6)}given:\n  - cake\n---\n${chapters}\n`;
+  const now = new Date("2026-10-24T03:00:00Z");
+  const id = recordPick(p.picks, "a1", ["cake", "home", "outer"], now).id;
+  const text = storyText(storyChapters(10), { title: "Cat Days", pick_id: id });
   const f = writeDraft("story-draft.md", text);
+
   const m = capture();
   assert.equal(runMeasure([f], m.io, p), 0);
-  assert.match(m.out.join(), /이야기, 목표 A1, 6장/);
+  const out = m.out.join();
+  assert.match(out, /이야기, 목표 A1, 10장 \(범위 9~11\), 장마다 400~600단어/);
+  assert.match(out, /넘긴 단어 중 쓴 것: 2 \/ 필요 2 \(넘긴 3개의 60%\)/);
+  assert.match(out, /대사 비율: 40\.0% \(2000 \/ 5000단어, 하한 30%/);
+  assert.match(out, /1장 통과: .*\(범위 400~600\), 대사 /);
+
+  const j = capture();
+  assert.equal(runMeasure([f, "--json"], j.io, p), 0);
+  const json = JSON.parse(j.out.join(""));
+  for (const k of ["chapterRange", "chapterWordsRange", "usedGiven", "requiredGiven", "unusedGiven", "dialogueWords", "dialogueRatio"]) assert.ok(k in json, k);
+
+  // 스킬용 짧은 출력: 통과·이유·장마다 비율·길이·대사·넘는 단어, 쓴 수, 쓰지 않은 넘긴 단어. 덮는 단어 목록은 없다
+  const b = capture();
+  assert.equal(runMeasure([f, "--brief"], b.io, p), 0);
+  const brief = JSON.parse(b.out.join(""));
+  assert.deepEqual(Object.keys(brief.chapters[0]).sort(), ["above", "chapter", "dialogue", "range", "ratio", "words"]);
+  assert.equal(brief.usedGiven, 2);
+  assert.deepEqual(brief.unusedGiven, ["outer"]);
+  assert.ok(!b.out.join().includes("covers"));
+  assert.ok(b.out.join().length < j.out.join().length / 5, `짧은 출력 ${b.out.join().length}자`);
+  assert.equal(runMeasure([writeDraft("short-brief.txt", "The cat."), "--level", "a1", "--brief"], capture().io, p), 2);
+
   assert.equal(runMeasure([f, "--level", "a1"], capture().io, p), 2);
+  // 넘긴 단어가 기록과 다르거나, 기록이 없으면 측정도 저장도 입력 오류다
+  const swapped = writeDraft("story-swapped.md", storyText(storyChapters(10), { title: "Cat Days", pick_id: id }, ["cake", "home", "cream"]));
+  const sw = capture();
+  assert.equal(runMeasure([swapped], sw.io, p), 2);
+  assert.match(sw.err.join(), /기록에 없는 단어: cream/);
+  assert.equal(runSave([swapped], capture().io, p, now), 2);
+  assert.equal(runSave([writeDraft("story-noid.md", storyText(storyChapters(10), { pick_id: "a1-none" }))], capture().io, p, now), 2);
+  assert.equal(runSave([writeDraft("story-nopick.md", storyText(storyChapters(10), { pick_id: "" }))], capture().io, p, now), 2);
+
   const s = capture();
-  assert.equal(runSave([f], s.io, p, new Date("2026-10-24T03:00:00Z")), 0);
-  assert.ok(fs.existsSync(path.join(p.readings, "a1", "2026-10-24-cat-days.md")));
-  const bad = writeDraft("story-bad.md", text.replace("## The Cat Day", "## The Zebra Lion Tiger Cream Day"));
-  assert.equal(runMeasure([bad], capture().io, p), 1);
+  assert.equal(runSave([f], s.io, p, now), 0);
+  const saved = path.join(p.readings, "a1", "2026-10-24-cat-days.md");
+  assert.ok(fs.existsSync(saved));
+  // 저장한 뒤에는 같은 뽑기를 쓴 초안이 입력 오류다
+  const reuse = capture();
+  assert.equal(runMeasure([f], reuse.io, p), 2);
+  assert.match(reuse.err.join(), /이미 저장된 이야기가 썼습니다/);
+
+  // 다른 이야기를 더 저장한 뒤에도, 저장 위치 안의 파일을 다시 재면(뽑기 대조 없이) 통과한다
+  const id2 = recordPick(p.picks, "a1", ["cake", "home", "mouse"], now).id;
+  assert.equal(runSave([writeDraft("story-2.md", storyText(storyChapters(10), { title: "Dog Days", pick_id: id2 }, ["cake", "home", "mouse"]))], capture().io, p, now), 0);
+  const re = capture();
+  assert.equal(runMeasure([saved, "--brief"], re.io, p), 0);
+  assert.equal(JSON.parse(re.out.join("")).usedGiven, 2);
+
+  const bad = writeDraft("story-bad.md", text.replace("## The Day One", "## The Zebra Lion Tiger Cream Day"));
+  const bj = capture();
+  assert.equal(runMeasure([bad, "--json"], bj.io, { ...p, readings: path.join(tmp, "story-cli-empty") }), 1);
+  const failJson = JSON.parse(bj.out.join(""));
+  assert.equal(failJson.pass, false);
+  for (const k of ["chapterRange", "chapterWordsRange", "usedGiven", "requiredGiven", "unusedGiven", "dialogueWords", "dialogueRatio", "reasons"]) assert.ok(k in failJson, k);
 });

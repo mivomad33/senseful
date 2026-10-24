@@ -4,7 +4,7 @@
 // - 고유명사: 문장 중간의 대문자 단어 중 대문자 표제어(Monday, TV)가 아닌 것. 문장 첫 대문자 단어는 일반 단어로 보고, 사전에 없으면서 같은 모양이 문장 중간에도 대문자로 나올 때만 고유명사로 본다.
 import lemmatizer from "wink-lemmatizer";
 import { foldText, wordKey, type Lexicon } from "./lexicon";
-import { InputError, lengthRange, levelRank, withinRatio, type ReadingLevel } from "./rules";
+import { InputError, lengthRange, levelRank, rangeAround, withinRatio, type ReadingLevel } from "./rules";
 
 /** 사전에 없는 형태가 바뀐 기능어 */
 const FUNCTION_FORMS: Record<string, string> = { an: "a", these: "this", those: "that" };
@@ -38,6 +38,8 @@ export interface Measurement {
   covers: string[];
   sentences: number;
   avgSentenceLength: number;
+  /** 큰따옴표 안 단어 수(opts.dialogue일 때만 센다) */
+  dialogueWords?: number;
 }
 
 interface Token {
@@ -119,6 +121,36 @@ function splitContraction(lower: string, lex: Lexicon): string[] {
 /** 측정 옵션. names: 같은 이야기의 다른 장처럼, 문장 중간 대문자 이름을 함께 찾을 글(고유명사 판별 문맥) */
 export interface MeasureOptions {
   names?: string[];
+  /** 길이 목표(단어 수). 없으면 짧은 글의 레벨 길이(TARGET_WORDS) */
+  lengthTarget?: number;
+  /** 큰따옴표 안 단어를 센다. 문단 끝에서 따옴표가 열려 있으면 입력 오류 */
+  dialogue?: boolean;
+}
+
+/** 큰따옴표("…", “…”) 안의 구간 [시작, 끝]. 작은따옴표는 아포스트로피와 구별할 수 없어 세지 않는다.
+ * 따옴표는 문단(빈 줄로 나뉜 덩어리) 안에서 닫혀야 한다. 짝이 밀려 비율이 조용히 틀리지 않게 하기 위해서다 */
+function quoteSpans(body: string): [number, number][] {
+  const spans: [number, number][] = [];
+  let start = 0;
+  body.split(/(\r?\n[ \t]*\r?\n)/).forEach((part, k) => {
+    if (k % 2 === 0) {
+      const para = k / 2 + 1;
+      let open = -1;
+      for (let i = 0; i < part.length; i++) {
+        const c = part[i];
+        // 둥근 따옴표는 방향이 있으므로, 방향이 어긋나면 짝이 밀린 것으로 보고 멈춘다
+        if ((c === "\u201c" && open >= 0) || (c === "\u201d" && open < 0)) throw new InputError(`${para}번째 문단에서 둥근 큰따옴표의 짝이 맞지 않습니다`);
+        if (open < 0 && (c === '"' || c === "\u201c")) open = i;
+        else if (open >= 0 && (c === '"' || c === "\u201d")) {
+          spans.push([start + open, start + i]);
+          open = -1;
+        }
+      }
+      if (open >= 0) throw new InputError(`${para}번째 문단에서 큰따옴표가 닫히지 않았습니다(대사는 문단마다 닫습니다)`);
+    }
+    start += part.length;
+  });
+  return spans;
 }
 
 /** 표기를 맞추고, 남은 영어 밖 글자가 있으면 입력 오류 */
@@ -243,7 +275,12 @@ export function measure(rawBody: string, level: ReadingLevel, lex: Lexicon, opts
     .map(([lemma, v]) => ({ lemma, forms: [...v.forms], level: v.level }))
     .sort((a, b) => a.lemma.localeCompare(b.lemma));
   const countedTypes = types.size;
-  const range = lengthRange(level);
+  const range = opts.lengthTarget ? rangeAround(opts.lengthTarget) : lengthRange(level);
+  let dialogueWords: number | undefined;
+  if (opts.dialogue) {
+    const spans = quoteSpans(body);
+    dialogueWords = tokens.filter((t) => spans.some(([a, b]) => t.start > a && t.end <= b)).length;
+  }
   const reasons: string[] = [];
   if (countedTypes === 0) reasons.push("센 단어가 없습니다");
   else if (!withinRatio(above.length, countedTypes)) reasons.push(`넘는 단어 비율 ${(above.length / countedTypes * 100).toFixed(1)}%가 한도 5%를 넘습니다`);
@@ -263,5 +300,6 @@ export function measure(rawBody: string, level: ReadingLevel, lex: Lexicon, opts
     covers: [...covers].sort(),
     sentences,
     avgSentenceLength: sentences ? Math.round((totalWords / sentences) * 10) / 10 : 0,
+    ...(dialogueWords === undefined ? {} : { dialogueWords }),
   };
 }

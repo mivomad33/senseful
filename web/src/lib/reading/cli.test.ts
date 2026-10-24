@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { runMeasure, runSave, runWords, type Paths } from "./cli";
+import { runCoverage, runMeasure, runPick, runSave, runWords, type Paths } from "./cli";
 import { parseFile } from "./draft";
 import { FIXTURE_ENTRIES, fixtureLexicon } from "./fixture";
 import { parseExceptions } from "./lexicon";
@@ -166,4 +166,58 @@ test("허용 단어 명령: 그 레벨 이하 표제어를 레벨별로 낸다",
   assert.match(c.out[0], /^A1 \(\d+\): a, and/);
   assert.match(c.out[1], /^A2 \(4\): colour, ice, rise, unfortunately$/);
   assert.equal(runWords(["x1"], capture().io, p), 2);
+});
+
+test("덮기 현황 명령: 레벨마다 덮인 수를 내고, 저장한 글을 지우면 다시 남는다. DB가 없으면 입력 오류", () => {
+  const p = makePaths("coverage");
+  const now = new Date("2026-10-24T03:00:00Z");
+  const before = capture();
+  assert.equal(runCoverage(["--json"], before.io, p), 0);
+  const b = JSON.parse(before.out.join("")).levels.find((r: { level: string }) => r.level === "a1");
+  assert.equal(b.covered, 0);
+
+  assert.equal(runSave([writeDraft("cov-draft.md", draft(PASS_BODY, { title: "Cov" }))], capture().io, p, now), 0);
+  const after1 = capture();
+  assert.equal(runCoverage(["--level", "a1", "--list", "--json"], after1.io, p), 0);
+  const j = JSON.parse(after1.out.join(""));
+  assert.ok(j.levels[0].covered > 0);
+  assert.ok(!j.remaining.includes("cat") && j.remaining.includes("mouse"));
+
+  fs.rmSync(path.join(p.readings, "a1", "2026-10-24-cov.md"));
+  const after2 = capture();
+  assert.equal(runCoverage(["--json"], after2.io, p), 0);
+  assert.equal(JSON.parse(after2.out.join("")).levels[0].covered, 0);
+
+  const noDb = capture();
+  assert.equal(runCoverage([], noDb.io, { ...p, db: path.join(tmp, "missing.sqlite") }), 2);
+  assert.match(noDb.err.join(), /단어 DB가 없습니다/);
+});
+
+test("단어 뽑기 명령: 덮이지 않은 단어만, 같은 시드면 같게", () => {
+  const p = makePaths("pick");
+  const a = capture();
+  assert.equal(runPick(["a2", "--seed", "3", "--json"], a.io, p), 0);
+  const words = JSON.parse(a.out.join(""));
+  assert.deepEqual([...words].sort(), ["colour", "ice", "rise", "unfortunately"]); // 4개뿐이라 모두
+  const again = capture();
+  runPick(["a2", "--seed", "3", "--json"], again.io, p);
+  assert.deepEqual(JSON.parse(again.out.join("")), words);
+  assert.equal(runPick(["x1"], capture().io, p), 2);
+});
+
+test("측정·저장 명령은 이야기 초안(kind: story)을 장마다 재고 저장한다", () => {
+  const p = makePaths("story-cli");
+  const body = Array(7).fill(known.join(" ")).join(" ");
+  const chapters = Array.from({ length: 6 }, () => `## The Cat Day\n\n${body}.`).join("\n\n");
+  const text = `---\ntitle: Cat Days\nkind: story\nlevel: a1\nsummary: a cat\nrevisions:\n${"  - 0\n".repeat(6)}given:\n  - cake\n---\n${chapters}\n`;
+  const f = writeDraft("story-draft.md", text);
+  const m = capture();
+  assert.equal(runMeasure([f], m.io, p), 0);
+  assert.match(m.out.join(), /이야기, 목표 A1, 6장/);
+  assert.equal(runMeasure([f, "--level", "a1"], capture().io, p), 2);
+  const s = capture();
+  assert.equal(runSave([f], s.io, p, new Date("2026-10-24T03:00:00Z")), 0);
+  assert.ok(fs.existsSync(path.join(p.readings, "a1", "2026-10-24-cat-days.md")));
+  const bad = writeDraft("story-bad.md", text.replace("## The Cat Day", "## The Zebra Lion Tiger Cream Day"));
+  assert.equal(runMeasure([bad], capture().io, p), 1);
 });

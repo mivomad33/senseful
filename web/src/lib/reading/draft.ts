@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { TIME_ZONE } from "@/lib/day";
 import type { Lexicon } from "./lexicon";
-import { measure, type Measurement } from "./measure";
+import { measure, nameHeads, sentenceCaseTitle, type Measurement } from "./measure";
 import { InputError, isLevel, type ReadingLevel } from "./rules";
 
 export type Fields = Record<string, string | string[]>;
@@ -141,4 +141,32 @@ export function saveReading(draftText: string, dir: string, lex: Lexicon, now = 
     throw e;
   }
   return { ok: true, file, measurement: m };
+}
+
+// 이야기(docs/specs/2026-10-reading-stories). 정보에 kind: story를 두고, 본문은 "## 장 제목" 줄로 장을 나눈다.
+
+export const isStory = (f: Fields) => f.kind === "story";
+
+export interface Chapter {
+  title: string;
+  body: string;
+}
+
+/** 본문을 장으로 나눈다. 첫 "## " 줄 앞에 글이 있거나, 제목이나 본문이 빈 장이 있으면 입력 오류 */
+export function splitChapters(body: string): Chapter[] {
+  const parts = body.split(/^## +/m);
+  if (parts[0].trim()) throw new InputError("이야기 본문은 \"## 장 제목\" 줄로 시작해야 합니다.");
+  return parts.slice(1).map((p, i) => {
+    const nl = p.indexOf("\n");
+    const title = (nl < 0 ? p : p.slice(0, nl)).trim();
+    const text = nl < 0 ? "" : p.slice(nl + 1).trim();
+    if (!title || !text) throw new InputError(`${i + 1}장의 제목이나 본문이 비어 있습니다.`);
+    return { title, body: text };
+  });
+}
+
+/** 장마다 재는 글. 장 제목도 장 본문과 함께 잰다(제목에 넘는 단어가 재지 않은 채 남지 않게). 제목식 대문자는 본문의 이름만 남기고 소문자로 바꾼다 */
+export function chapterTexts(chapters: Chapter[], lex: Lexicon): string[] {
+  const names = nameHeads(chapters.map((c) => c.body), lex);
+  return chapters.map((c) => `${sentenceCaseTitle(c.title, names, lex)}\n\n${c.body}`);
 }

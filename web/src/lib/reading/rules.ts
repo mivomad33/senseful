@@ -31,3 +31,11 @@ export function withinRatio(above: number, counted: number): boolean {
 
 /** 입력 오류(종료 코드 2) */
 export class InputError extends Error {}
+
+// 이야기와 덮기(docs/specs/2026-10-reading-stories). 장 수와 넘기는 단어 수는 여기서만 바꾼다.
+
+/** 이야기 한 권의 장 수 [최소, 최대]. 장마다 위 비율 한도와 길이(TARGET_WORDS)를 지킨다 */
+export const STORY_CHAPTERS: [number, number] = [6, 8];
+
+/** 이야기 한 권을 위해 덮이지 않은 단어 중 뽑아 넘기는 수 */
+export const PICK_COUNT: Record<ReadingLevel, number> = { a1: 80, a2: 80, b1: 100, b2: 120, c1: 120 };

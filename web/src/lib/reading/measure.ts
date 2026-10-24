@@ -34,6 +34,8 @@ export interface Measurement {
   reasons: string[];
   above: AboveWord[];
   properNouns: string[];
+  /** 본문이 덮는 사전 단어(key). 센 단어의 원형 후보 중 사전에 있는 것 모두. 고유명사는 넣지 않는다 */
+  covers: string[];
   sentences: number;
   avgSentenceLength: number;
 }
@@ -80,17 +82,18 @@ function candidates(w: string): string[] {
 }
 
 /** 사전에 있는 후보 중 가장 낮은 레벨. 없으면 대표 원형과 null */
-function resolve(w: string, lex: Lexicon): { lemma: string; level: ReadingLevel | null; known: boolean; capHeadword: boolean } {
+function resolve(w: string, lex: Lexicon): { lemma: string; level: ReadingLevel | null; known: boolean; capHeadword: boolean; keys: string[] } {
   const c = candidates(w);
+  const keys = c.filter((k) => lex.level.has(k));
   let best: { lemma: string; level: ReadingLevel } | null = null;
   for (const k of c) {
     const lv = lex.level.get(k);
     if (lv && (!best || levelRank(lv) < levelRank(best.level))) best = { lemma: k, level: lv };
   }
   const capHeadword = c.some((k) => lex.capitalized.has(k));
-  if (best) return { ...best, known: true, capHeadword };
+  if (best) return { ...best, known: true, capHeadword, keys };
   const lemma = c.find((k) => k !== w && k.length < w.length) ?? w;
-  return { lemma, level: null, known: false, capHeadword };
+  return { lemma, level: null, known: false, capHeadword, keys };
 }
 
 /** 축약형을 나눈 부분(소문자). 사전에 그대로 있는 모양(o'clock)은 나누지 않는다 */
@@ -113,19 +116,48 @@ function splitContraction(lower: string, lex: Lexicon): string[] {
   return lower.split("'").filter(Boolean);
 }
 
-export function measure(rawBody: string, level: ReadingLevel, lex: Lexicon): Measurement {
+/** 측정 옵션. names: 같은 이야기의 다른 장처럼, 문장 중간 대문자 이름을 함께 찾을 글(고유명사 판별 문맥) */
+export interface MeasureOptions {
+  names?: string[];
+}
+
+/** 표기를 맞추고, 남은 영어 밖 글자가 있으면 입력 오류 */
+function prepare(rawBody: string): string {
   const body = foldText(rawBody);
   // 맞춘 뒤에도 남은 영어 밖 글자(키릴 문자, 한자 등)는 단어를 조각내 다른 단어처럼 세게 하므로 받지 않는다
   for (const ch of body) {
     if (ch > "\x7f" && /\p{L}/u.test(ch)) throw new InputError(`영어 밖 글자가 있습니다: ${ch}`);
   }
+  return body;
+}
+
+/** 문장 중간에 대문자로 나온 단어의 첫 부분(하이픈·축약·소유격을 뗀 것) 소문자. 문장 첫 단어의 고유명사 판별에 쓴다 */
+function midCapitalHeads(tokens: Token[], lex: Lexicon): string[] {
+  return tokens.filter((t) => !t.sentenceStart && isCap(t.text)).map((t) => splitContraction(t.text.split("-")[0].toLowerCase(), lex)[0]);
+}
+
+/** 여러 글의 본문에서 문장 중간에 대문자로 나온 이름의 첫 부분(소문자) */
+export function nameHeads(texts: string[], lex: Lexicon): Set<string> {
+  return new Set(texts.flatMap((t) => midCapitalHeads(tokenize(prepare(t)), lex)));
+}
+
+/** 제목을 문장처럼 바꾼다: 대문자로 시작하는 단어 중 이름(names)이 아닌 것은 소문자로. 제목식 대문자 단어가 고유명사로 빠져 재지 않은 채 남지 않게 한다 */
+export function sentenceCaseTitle(title: string, names: Set<string>, lex: Lexicon): string {
+  return title.replace(TOKEN, (w) => {
+    if (!isCap(w) || HONORIFICS.has(w)) return w;
+    const h = splitContraction(w.split("-")[0].toLowerCase(), lex)[0];
+    return names.has(h) ? w : w.toLowerCase();
+  });
+}
+
+export function measure(rawBody: string, level: ReadingLevel, lex: Lexicon, opts: MeasureOptions = {}): Measurement {
+  const body = prepare(rawBody);
   const tokens = tokenize(body);
   const totalWords = tokens.length;
 
-  /** 단어의 첫 부분(하이픈·축약·소유격을 뗀 것) 소문자 */
-  const head = (text: string) => splitContraction(text.split("-")[0].toLowerCase(), lex)[0];
-  // 문장 중간에 대문자로 나온 이름(문장 첫 단어의 고유명사 판별용)
-  const capMid = new Set(tokens.filter((t) => !t.sentenceStart && isCap(t.text)).map((t) => head(t.text)));
+  const capMid = new Set(midCapitalHeads(tokens, lex));
+  for (const other of opts.names ?? []) for (const h of midCapitalHeads(tokenize(prepare(other)), lex)) capMid.add(h);
+  const covers = new Set<string>();
 
   const types = new Map<string, { level: ReadingLevel | null; forms: Set<string> }>();
   const properNouns = new Set<string>();
@@ -138,10 +170,16 @@ export function measure(rawBody: string, level: ReadingLevel, lex: Lexicon): Mea
   /** 단어 하나(축약·하이픈을 나눈 뒤)를 센다. surface: 본문에 쓴 모양, first: 문장 첫 단어의 첫 부분인지 */
   const countWord = (part: string, surface: string, original: string, first: boolean) => {
     const r = resolve(part.toLowerCase(), lex);
+    // 다른 곳에서 이름으로 쓰인 단어가 문장 첫머리에 오면 측정에는 세되(엄격하게), 그 단어를 덮지는 않는다(이름이 일반 단어를 덮지 않게)
+    let nameAtStart = false;
     if (isCap(part) && !r.capHeadword) {
       if (!first) return void properNouns.add(surface);
-      if (!r.known && capMid.has(part.toLowerCase())) return void properNouns.add(surface);
+      if (capMid.has(part.toLowerCase())) {
+        if (!r.known) return void properNouns.add(surface);
+        nameAtStart = true;
+      }
     }
+    if (!nameAtStart) for (const k of r.keys) covers.add(k);
     addType(r.lemma, r.level, original);
   };
 
@@ -158,6 +196,7 @@ export function measure(rawBody: string, level: ReadingLevel, lex: Lexicon): Mea
     });
     if (hit) {
       const key = hit.join(" ");
+      covers.add(key);
       addType(key, lex.level.get(key)!, tokens.slice(i, i + hit.length).map((x) => x.text).join(" "));
       i += hit.length - 1;
       continue;
@@ -170,7 +209,10 @@ export function measure(rawBody: string, level: ReadingLevel, lex: Lexicon): Mea
     if (t.text.includes("-") && !hasDigit(t.text) && lex.level.has(whole)) {
       const r = resolve(whole, lex);
       if (isCap(t.text) && !r.capHeadword && !t.sentenceStart) properNouns.add(t.text);
-      else addType(r.lemma, r.level, t.text);
+      else {
+        for (const k of r.keys) covers.add(k);
+        addType(r.lemma, r.level, t.text);
+      }
       continue;
     }
     t.text.split("-").forEach((seg, si) => {
@@ -218,6 +260,7 @@ export function measure(rawBody: string, level: ReadingLevel, lex: Lexicon): Mea
     reasons,
     above,
     properNouns: [...properNouns].sort(),
+    covers: [...covers].sort(),
     sentences,
     avgSentenceLength: sentences ? Math.round((totalWords / sentences) * 10) / 10 : 0,
   };

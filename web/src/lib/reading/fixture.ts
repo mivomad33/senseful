@@ -5,10 +5,10 @@ import type { ReadingLevel } from "./rules";
 const at = (level: ReadingLevel, words: string) => words.split(",").map((w) => ({ headword: w.trim(), level }));
 
 export const FIXTURE_ENTRIES: Entry[] = [
-  ...at("a1", "a, the, be, have, do, not, go, find, mean, lie, child, good, play, big, teach, see, stop, try, happy, this, that, I, Monday, TV, o’clock, cafe, T-shirt, ice cream, it, he, she, cat, dog, home, at, in, on, and, can, will, would, sister, small, my, day, live, they, eat, cake, like, mouse, woman, us, let, because of"),
+  ...at("a1", "out, a, the, be, have, do, not, go, find, mean, lie, child, good, play, big, teach, see, stop, try, happy, this, that, I, Monday, TV, o’clock, cafe, T-shirt, ice cream, it, he, she, cat, dog, home, at, in, on, and, can, will, would, sister, small, my, day, live, they, eat, cake, like, mouse, woman, us, let, because of"),
   ...at("a2", "rise, unfortunately, ice, colour"),
   ...at("b1", "lay, AI, Wi-Fi™"),
-  ...at("b2", "found, means, rose, seed, cream"),
+  ...at("b2", "found, means, rose, seed, cream, outer"),
 ];
 
 export const fixtureLexicon = (exceptions: Entry[] = []) => buildLexicon(FIXTURE_ENTRIES, exceptions);

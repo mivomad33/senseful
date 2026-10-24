@@ -2,10 +2,12 @@
 // 명령 파일은 이 함수들을 부르기만 한다(테스트가 같은 경로를 탄다).
 import fs from "node:fs";
 import path from "node:path";
-import { parseFile, saveReading } from "./draft";
+import { coverageReport, coveredKeys, levelWords, pickWords } from "./coverage";
+import { isStory, parseFile, saveReading } from "./draft";
 import { loadLexicon, type Lexicon } from "./lexicon";
 import { measure, type Measurement } from "./measure";
 import { InputError, isLevel, levelRank, type ReadingLevel } from "./rules";
+import { measureStory, saveStory, toStory, type StoryMeasurement } from "./story";
 
 export interface Io {
   out: (s: string) => void;
@@ -32,8 +34,8 @@ function parseArgs(argv: string[], paths: Paths) {
   const rest: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--json") flags.set("json", true);
-    else if (/^--(level|db|exceptions|dir)$/.test(a)) {
+    if (a === "--json" || a === "--list") flags.set(a.slice(2), true);
+    else if (/^--(level|db|exceptions|dir|seed)$/.test(a)) {
       const v = argv[++i];
       if (!v) throw new InputError(`${a} 뒤에 값이 없습니다.`);
       flags.set(a.slice(2), v);
@@ -44,6 +46,8 @@ function parseArgs(argv: string[], paths: Paths) {
   return {
     rest,
     json: flags.get("json") === true,
+    list: flags.get("list") === true,
+    seed: str("seed"),
     level: str("level")?.toLowerCase(),
     paths: { db: str("db") ?? paths.db, exceptions: str("exceptions") ?? paths.exceptions, readings: str("dir") ?? paths.readings },
   };
@@ -61,6 +65,21 @@ export function formatMeasurement(m: Measurement): string {
   if (m.reasons.length) lines.push(...m.reasons.map((r) => `  미달 이유: ${r}`));
   lines.push(`넘는 단어 ${m.above.length}개:`);
   for (const a of m.above) lines.push(`  ${a.lemma} [${a.level ? a.level.toUpperCase() : "목록에 없음"}] ← ${a.forms.join(", ")}`);
+  lines.push(`고유명사로 뺀 단어: ${m.properNouns.length ? m.properNouns.join(", ") : "없음"}`);
+  return lines.join("\n");
+}
+
+export function formatStory(m: StoryMeasurement): string {
+  const lines = [
+    `${m.pass ? "통과" : "미달"} (이야기, 목표 ${m.level.toUpperCase()}, ${m.chapterCount}장, 전체 ${m.totalWords}단어)`,
+    ...m.reasons.map((r) => `  미달 이유: ${r}`),
+  ];
+  m.chapters.forEach((c, i) => {
+    lines.push(`${i + 1}장 ${c.pass ? "통과" : "미달"}: 넘는 단어 ${pct(c.ratio)} (${c.aboveTypes}/${c.countedTypes}), ${c.totalWords}단어 (범위 ${c.lengthRange[0]}~${c.lengthRange[1]})`);
+    for (const a of c.above) lines.push(`    ${a.lemma} [${a.level ? a.level.toUpperCase() : "목록에 없음"}] ← ${a.forms.join(", ")}`);
+  });
+  if (m.titleAbove.length) lines.push(`책 제목의 넘는 단어: ${m.titleAbove.join(", ")}`);
+  lines.push(`목표 레벨 단어: ${m.targetWords.length}개, 넘긴 단어 중 쓴 것: ${m.usedGiven.length}개, 새로 덮을 단어: ${m.newWords.length}개`);
   lines.push(`고유명사로 뺀 단어: ${m.properNouns.length ? m.properNouns.join(", ") : "없음"}`);
   return lines.join("\n");
 }
@@ -86,6 +105,13 @@ export function runMeasure(argv: string[], io: Io, paths = defaultPaths()): numb
     if (!fs.existsSync(file)) throw new InputError(`글 파일이 없습니다: ${file}`);
     const raw = fs.readFileSync(file, "utf8");
     const parsed = raw.startsWith("---") ? parseFile(raw) : { fields: {}, body: raw.trim() };
+    if (isStory(parsed.fields)) {
+      if (a.level) throw new InputError("이야기는 --level을 받지 않습니다. 레벨은 초안 정보의 level로 정합니다.");
+      const lex = loadLexicon(a.paths.db, a.paths.exceptions);
+      const m = measureStory(toStory(parsed), lex, coveredKeys(a.paths.readings, lex));
+      io.out(a.json ? JSON.stringify(m, null, 2) : formatStory(m));
+      return m.pass ? 0 : 1;
+    }
     const level = a.level ?? (typeof parsed.fields.level === "string" ? parsed.fields.level.toLowerCase() : undefined);
     if (!isLevel(level)) throw new InputError("목표 레벨이 없습니다. --level a1 처럼 주거나 파일 정보에 level을 적어 주세요.");
     const m = measure(parsed.body, level, loadLexicon(a.paths.db, a.paths.exceptions));
@@ -102,7 +128,16 @@ export function runSave(argv: string[], io: Io, paths = defaultPaths(), now = ne
     const file = a.rest[0];
     if (!file) throw new InputError("사용: npm run reading:save -- <초안 파일>");
     if (!fs.existsSync(file)) throw new InputError(`초안 파일이 없습니다: ${file}`);
-    const r = saveReading(fs.readFileSync(file, "utf8"), a.paths.readings, loadLexicon(a.paths.db, a.paths.exceptions), now);
+    const raw = fs.readFileSync(file, "utf8");
+    const lex = loadLexicon(a.paths.db, a.paths.exceptions);
+    const parsed = parseFile(raw);
+    if (isStory(parsed.fields)) {
+      const r = saveStory(parsed, a.paths.readings, lex, now);
+      if (a.json) io.out(JSON.stringify(r, null, 2));
+      else io.out(r.ok ? `저장했습니다: ${r.file}\n${formatStory(r.measurement)}` : `저장하지 않았습니다(미달).\n${formatStory(r.measurement)}`);
+      return r.ok ? 0 : 1;
+    }
+    const r = saveReading(raw, a.paths.readings, lex, now);
     if (a.json) io.out(JSON.stringify(r, null, 2));
     else io.out(r.ok ? `저장했습니다: ${r.file}\n${formatMeasurement(r.measurement)}` : `저장하지 않았습니다(미달).\n${formatMeasurement(r.measurement)}`);
     return r.ok ? 0 : 1;
@@ -121,6 +156,39 @@ export function runWords(argv: string[], io: Io, paths = defaultPaths()): number
     for (const [lv, words] of [...by].sort((x, y) => levelRank(x[0]) - levelRank(y[0]))) {
       io.out(`${lv.toUpperCase()} (${words.length}): ${words.sort().join(", ")}`);
     }
+    return 0;
+  });
+}
+
+/** 덮기 현황: [--level a1 --list] [--json]. 레벨마다 레벨 단어 수, 덮인 수, 남은 수. --list면 그 레벨의 남은 단어를 낸다 */
+export function runCoverage(argv: string[], io: Io, paths = defaultPaths()): number {
+  return run(io, () => {
+    const a = parseArgs(argv, paths);
+    if (a.level !== undefined && !isLevel(a.level)) throw new InputError("--level은 a1, a2, b1, b2, c1 중 하나여야 합니다.");
+    if (a.list && !a.level) throw new InputError("--list는 --level과 함께 씁니다.");
+    const lex = loadLexicon(a.paths.db, a.paths.exceptions);
+    const covered = coveredKeys(a.paths.readings, lex);
+    const report = coverageReport(covered, lex).filter((r) => !a.level || r.level === a.level);
+    const remaining = a.list && isLevel(a.level) ? levelWords(lex, a.level).filter((w) => !covered.has(w)) : undefined;
+    if (a.json) io.out(JSON.stringify({ levels: report, ...(remaining ? { remaining } : {}) }, null, 2));
+    else {
+      for (const r of report) io.out(`${r.level.toUpperCase()}: 덮인 ${r.covered} / ${r.total} (${pct(r.ratio)}), 남은 ${r.remaining}`);
+      if (remaining) io.out(`남은 단어: ${remaining.join(", ")}`);
+    }
+    return 0;
+  });
+}
+
+/** 단어 뽑기: <레벨> [--seed 숫자] [--json]. 덮이지 않은 그 레벨 단어를 무작위로 뽑는다(수는 rules.ts의 PICK_COUNT) */
+export function runPick(argv: string[], io: Io, paths = defaultPaths()): number {
+  return run(io, () => {
+    const a = parseArgs(argv, paths);
+    const level = a.rest[0]?.toLowerCase();
+    if (!isLevel(level)) throw new InputError("사용: npm run reading:pick -- <a1|a2|b1|b2|c1> [--seed 숫자]");
+    if (a.seed !== undefined && !/^\d+$/.test(a.seed)) throw new InputError("--seed는 0 이상의 정수여야 합니다.");
+    const lex = loadLexicon(a.paths.db, a.paths.exceptions);
+    const words = pickWords(lex, level, coveredKeys(a.paths.readings, lex), { seed: a.seed === undefined ? undefined : Number(a.seed) });
+    io.out(a.json ? JSON.stringify(words) : words.join("\n"));
     return 0;
   });
 }

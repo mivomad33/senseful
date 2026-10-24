@@ -27,6 +27,8 @@
     "reading:measure": "tsx scripts/reading/measure.ts",
     "reading:save": "tsx scripts/reading/save.ts",
     "reading:words": "tsx scripts/reading/words.ts",
+    "reading:coverage": "tsx scripts/reading/coverage.ts",
+    "reading:pick": "tsx scripts/reading/pick.ts",
     "test:e2e": "tsx test/e2e/run.ts",
     "deploy": "tsx scripts/deploy.ts",
     "smoke": "tsx scripts/smoke.ts",

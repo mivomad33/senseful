@@ -24,6 +24,9 @@
     "db:import-local": "tsx scripts/import-local.ts",
     "db:reset-progress": "tsx scripts/reset-progress.ts",
     "cards:generate": "tsx scripts/generate-cards.ts",
+    "reading:measure": "tsx scripts/reading/measure.ts",
+    "reading:save": "tsx scripts/reading/save.ts",
+    "reading:words": "tsx scripts/reading/words.ts",
     "test:e2e": "tsx test/e2e/run.ts",
     "deploy": "tsx scripts/deploy.ts",
     "smoke": "tsx scripts/smoke.ts",
@@ -53,6 +56,7 @@
     "eslint-config-next": "16.4.2",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wink-lemmatizer": "^3.0.4"
   }
 }

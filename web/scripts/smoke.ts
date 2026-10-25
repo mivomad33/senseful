@@ -136,6 +136,11 @@ async function main() {
     const loc = r.headers.get("location") ?? "";
     return [301, 302, 307, 308].includes(r.status) && loc.startsWith("https://") ? [] : [`http 상태 ${r.status}`];
   });
+  await step("사용 분석 스크립트(/_vercel/insights/script.js) 200", async () => {
+    // Vercel 프로젝트에서 Web Analytics가 꺼져 있으면 404다.
+    const r = await get("/_vercel/insights/script.js");
+    return r.status === 200 ? [] : [`상태 ${r.status}`];
+  });
 
   const failed = results.filter((r) => !r.ok).length;
   console.log(failed ? `\n✗ 배포 뒤 점검 실패 ${failed}건 / ${results.length}건` : `\n✓ 배포 뒤 점검 모두 통과 (${results.length}건)`);

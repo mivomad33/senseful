@@ -29,7 +29,7 @@ export default function Privacy() {
       <Card className="flex flex-col gap-6 px-5 py-7 sm:px-8">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-extrabold">개인정보 처리방침</h1>
-          <p className="text-sm text-muted">시행일: 2026년 10월 22일</p>
+          <p className="text-sm text-muted">시행일: 2026년 10월 25일</p>
         </div>
         <p className="leading-relaxed text-muted">Senseful(이하 &quot;서비스&quot;)은 영단어 학습에 꼭 필요한 정보만 저장하고, 학습 기능을 위해서만 씁니다.</p>
         <Section title="1. 저장하는 정보">
@@ -46,12 +46,13 @@ export default function Privacy() {
             <li>로그인과 계정 구분, 학습 일정 계산, 학습 기록과 통계 표시 등 학습 기능에만 씁니다.</li>
             <li>답안이 맞았는지 판정하기 위해 답안과 카드 내용을 Anthropic의 Claude API로 보냅니다. 이메일 등 계정 정보는 함께 보내지 않습니다.</li>
             <li>카드 오류 신고는 개발자가 카드 내용을 고치는 데 씁니다.</li>
+            <li>서비스 개선을 위해 Vercel Web Analytics로 쿠키 없이 익명 방문 통계(방문한 페이지 주소, 브라우저 종류, 나라 등)를 모읍니다. 계정과 연결되지 않습니다.</li>
             <li>광고, 마케팅, 다른 회사에 판매하는 데에는 쓰지 않습니다.</li>
           </ul>
         </Section>
         <Section title="3. 맡기는 곳">
           <ul>
-            <li>Vercel: 서비스 호스팅</li>
+            <li>Vercel: 서비스 호스팅, 방문 통계</li>
             <li>Neon: 데이터베이스(싱가포르 리전)</li>
             <li>Anthropic: 답안 판정(Claude API)</li>
             <li>Google: 로그인</li>

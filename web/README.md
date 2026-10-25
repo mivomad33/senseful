@@ -113,6 +113,8 @@ psql "<운영 DB 풀링하지 않는 주소>" -f <백업 파일>  # 복원(빈 D
 
 Vercel CLI `vercel@65.1.0`을 `npx`로 쓴다(이 맥에 `vercel login`이 돼 있어야 한다). Git 연동은 없어 push로는 배포되지 않는다.
 
+- 사용 분석(Vercel Web Analytics) 켜기(처음 한 번, 켜기 전 배포는 배포 뒤 점검의 분석 항목이 실패한다): `npx --yes vercel@65.1.0 project web-analytics enable senseful`
+
 ```bash
 npm run deploy           # verify → 커밋을 임시 폴더로 꺼내 vercel build → 결과물 검사 → vercel deploy --prebuilt --prod → 배포 뒤 점검
 npm run smoke            # 배포 뒤 점검만(기본 https://senseful.vercel.app)
@@ -121,4 +123,4 @@ npm run check:output     # 결과물 검사만(.vercel/output)
 
 - 커밋하지 않은 변경이 있으면 배포하지 않는다. 작업 폴더가 아니라 커밋된 파일만 꺼내 빌드해, `.env.local`·`data/` 같은 로컬 파일이 결과물에 섞이지 않게 한다.
 - 결과물 검사: `data/`·`*.db`·`.env*` 파일, 금지 문자열·원문 문자열·비밀 값, 테스트 로그인 흔적이 없고, 공개 페이지의 제목·설명·canonical·링크 미리보기·아이콘, `robots.txt`·`sitemap.xml`이 정해진 값인지 본다.
-- 배포 뒤 점검: 공개 페이지·`robots.txt`·`sitemap.xml`·미리보기 이미지·아이콘, 로그인 없이 막히는 화면·API, 테스트 로그인 경로, 내려오는 HTML·JS·CSS의 금지 문자열, http→https를 밖에서 확인한다(상태를 바꾸는 요청은 하지 않는다).
+- 배포 뒤 점검: 공개 페이지·`robots.txt`·`sitemap.xml`·미리보기 이미지·아이콘, 로그인 없이 막히는 화면·API, 테스트 로그인 경로, 내려오는 HTML·JS·CSS의 금지 문자열, http→https, 사용 분석 스크립트(`/_vercel/insights/script.js`)를 밖에서 확인한다(상태를 바꾸는 요청은 하지 않는다).

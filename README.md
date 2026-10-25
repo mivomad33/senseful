@@ -56,7 +56,7 @@ flowchart LR
 | AI | Claude API(구조화 출력): 정답 판정, 카드 생성 |
 | 복습 | ts-fsrs |
 | 테스트 | node:test(단위·통합, 실제 Postgres), Playwright(E2E, 데스크톱·모바일) |
-| 배포 | Vercel, GitHub Actions |
+| 배포 | Vercel(호스팅, Web Analytics), GitHub Actions |
 
 ## 개발
 

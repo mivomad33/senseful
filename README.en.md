@@ -58,7 +58,7 @@ flowchart LR
 | AI | Claude API (structured output): grading, card generation |
 | Reviews | ts-fsrs |
 | Tests | node:test (unit and integration on real Postgres), Playwright (E2E, desktop and mobile) |
-| Deploy | Vercel, GitHub Actions |
+| Deploy | Vercel (hosting, Web Analytics), GitHub Actions |
 
 ## Development
 

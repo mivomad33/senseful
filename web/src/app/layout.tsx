@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import { Gothic_A1 } from "next/font/google";
 import { isDev } from "@/config";
 import { siteMetadata } from "@/lib/meta";
@@ -17,6 +18,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <div className="pointer-events-none fixed top-2 right-2 z-50 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100">개발 DB</div>
         )}
         {children}
+        {/* 사용 분석(Vercel Web Analytics). 쿠키 없이 익명 방문을 센다. 개발 서버에서는 보내지 않고(패키지 기본 동작), 콘솔 기록도 끈다. */}
+        <Analytics debug={false} />
       </body>
     </html>
   );

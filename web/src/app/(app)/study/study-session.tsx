@@ -192,22 +192,22 @@ function Verdict({ graded }: { graded: Graded }) {
 
 type Limit = Extract<Awaited<ReturnType<typeof submitAnswer>>, { limit: unknown }>;
 
-/** 지난 결과로 가는 링크. 결과가 없으면 보이지 않는다. */
-function PastLink({ count, onOpen }: { count: number; onOpen: () => void }) {
+/** 지난 결과로 가는 링크. 결과가 없으면 보이지 않는다. 판정 중에는 Esc처럼 누를 수 없다. */
+function PastLink({ count, onOpen, disabled }: { count: number; onOpen: () => void; disabled: boolean }) {
   if (count === 0) return null;
   return (
-    <Button variant="text" onClick={onOpen}>
+    <Button variant="text" onClick={onOpen} disabled={disabled}>
       ← 지난 결과 보기
     </Button>
   );
 }
 
 /** 결과가 아닌 화면 아래 줄: 왼쪽에 지난 결과 링크, 오른쪽에 단축키 안내(터치 기기에서는 숨긴다) */
-function BottomRow({ count, onOpen, children }: { count: number; onOpen: () => void; children?: React.ReactNode }) {
+function BottomRow({ count, onOpen, disabled, children }: { count: number; onOpen: () => void; disabled: boolean; children?: React.ReactNode }) {
   if (count === 0 && !children) return null;
   return (
     <div className="-mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
-      <PastLink count={count} onOpen={onOpen} />
+      <PastLink count={count} onOpen={onOpen} disabled={disabled} />
       <div className="ml-auto flex items-center gap-4 text-xs text-hint pointer-coarse:hidden">
         {children}
         {count > 0 && (
@@ -545,7 +545,7 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
             홈으로
           </Link>
         </Card>
-        <BottomRow count={history.length} onOpen={openLatest} />
+        <BottomRow count={history.length} onOpen={openLatest} disabled={pending} />
       </>
     );
   }
@@ -563,7 +563,7 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
           </Button>
           {noNew}
         </Card>
-        <BottomRow count={history.length} onOpen={openLatest} />
+        <BottomRow count={history.length} onOpen={openLatest} disabled={pending} />
       </>
     );
   }
@@ -637,7 +637,7 @@ export function StudySession({ initial, initialAhead = false, isAdmin }: { initi
         </form>
       </Card>
       {noNew}
-      <BottomRow count={history.length} onOpen={openLatest}>
+      <BottomRow count={history.length} onOpen={openLatest} disabled={pending}>
         <span className="inline-flex items-center gap-1.5">
           <Kbd>Enter</Kbd>제출
         </span>

@@ -178,3 +178,25 @@ test("같은 카드를 다시 푼 앞선 결과는 정정할 수 없고, 빼기�
   await expect(done).toHaveCount(0);
   await noHorizontalScroll(page);
 });
+
+test("판정 중에는 지난 결과 링크를 누를 수 없다", async ({ page }, info) => {
+  await login(page, userFor(info.project.name, 3));
+  await page.goto("/study");
+  await answer(page, "첫째 답");
+  await page.getByRole("button", { name: "다음 카드" }).click();
+  await expect(pastLink(page)).toBeEnabled();
+  // 판정 요청(서버 액션 POST)을 잠깐 붙잡아 판정 중 상태를 만든다.
+  let release = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  await page.route("**/study", async (route) => {
+    if (route.request().method() === "POST") await held;
+    await route.continue();
+  });
+  await answerBox(page).fill("둘째 답");
+  await page.getByRole("button", { name: "제출" }).click();
+  await expect(page.getByRole("button", { name: "판정 중" })).toBeVisible();
+  await expect(pastLink(page)).toBeDisabled();
+  release();
+  await expect(page.getByText("결과 2 / 2", { exact: true })).toBeVisible();
+  await page.unroute("**/study");
+});

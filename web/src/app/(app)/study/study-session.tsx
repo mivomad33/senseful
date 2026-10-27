@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button, buttonStyles } from "@/components/button";
 import { GradeLimitNotice, NoNewCardsNotice } from "@/components/notices";
 import { Badge, Card, Kbd } from "@/components/ui";
-import { after, waitingText } from "@/lib/format";
+import { dueText, waitingText } from "@/lib/format";
 import { findHeadword } from "@/lib/highlight";
 import { FEEDBACK_MAILTO } from "@/lib/links";
 import {
@@ -185,7 +185,7 @@ function Verdict({ graded }: { graded: Graded }) {
         <span className={`text-2xl font-extrabold ${ok ? "text-blue-ink" : "text-orange-ink"}`}>{ok ? "맞음" : "틀림"}</span>
         {graded.isCorrect !== graded.graderIsCorrect && <span className="text-sm text-muted">(정정함)</span>}
       </div>
-      <span className={`text-sm ${ok ? "text-blue-ink" : "text-orange-ink"}`}>{ok ? `다음 복습 ${after(graded.due)}` : `${after(graded.due)} 다시 나옵니다`}</span>
+      <span className={`text-sm ${ok ? "text-blue-ink" : "text-orange-ink"}`}>{dueText(graded.due, ok)}</span>
     </div>
   );
 }

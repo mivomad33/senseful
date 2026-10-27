@@ -10,6 +10,12 @@ export function after(due: number, now = Date.now()): string {
   return `${Math.round(h / 24)}일 뒤`;
 }
 
+/** 판정 결과의 다음 복습 문구. 지난 결과를 나중에 다시 보면 시각이 이미 지났을 수 있어, 그때는 "0분 뒤" 대신 지금 볼 수 있다고 보인다. */
+export function dueText(due: number, isCorrect: boolean, now = Date.now()): string {
+  if (Math.round((due - now) / 60_000) <= 0) return isCorrect ? "지금 복습할 수 있습니다" : "지금 다시 볼 수 있습니다";
+  return isCorrect ? `다음 복습 ${after(due, now)}` : `${after(due, now)} 다시 나옵니다`;
+}
+
 /** 시각(예: "오후 05:01") */
 export function clock(ms: number): string {
   return new Date(ms).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });

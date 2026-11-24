@@ -7,7 +7,7 @@
 **Learn English words one sense at a time, by translating example sentences**
 
 <p>
-  <a href="https://senseful.vercel.app"><img src="https://img.shields.io/badge/Live-senseful.vercel.app-111?style=flat-square" alt="Live"></a>
+  <img src="https://img.shields.io/badge/Status-discontinued-888?style=flat-square" alt="Status: discontinued">
   <a href="https://github.com/mivomad33/senseful/actions"><img src="https://img.shields.io/github/actions/workflow/status/mivomad33/senseful/ci.yml?style=flat-square&label=CI" alt="CI"></a>
   <img src="https://img.shields.io/badge/Next.js-16-000?style=flat-square&logo=nextdotjs" alt="Next.js 16">
   <img src="https://img.shields.io/badge/AI-Claude-d97757?style=flat-square" alt="Claude">
@@ -16,6 +16,9 @@
 [한국어](README.md) · English
 
 </div>
+
+> [!NOTE]
+> Senseful was shut down in November 2026. The live site (`senseful.vercel.app`) and all stored accounts and study records have been deleted. This repository is kept as an archive.
 
 ## How you study
 

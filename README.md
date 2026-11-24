@@ -7,7 +7,7 @@
 **영단어를 뜻 하나씩, 예문을 번역하며 암기합니다**
 
 <p>
-  <a href="https://senseful.vercel.app"><img src="https://img.shields.io/badge/Live-senseful.vercel.app-111?style=flat-square" alt="Live"></a>
+  <img src="https://img.shields.io/badge/%EC%83%81%ED%83%9C-%EC%9A%B4%EC%98%81%20%EC%A2%85%EB%A3%8C-888?style=flat-square" alt="상태: 운영 종료">
   <a href="https://github.com/mivomad33/senseful/actions"><img src="https://img.shields.io/github/actions/workflow/status/mivomad33/senseful/ci.yml?style=flat-square&label=CI" alt="CI"></a>
   <img src="https://img.shields.io/badge/Next.js-16-000?style=flat-square&logo=nextdotjs" alt="Next.js 16">
   <img src="https://img.shields.io/badge/AI-Claude-d97757?style=flat-square" alt="Claude">
@@ -16,6 +16,9 @@
 한국어 · [English](README.en.md)
 
 </div>
+
+> [!NOTE]
+> Senseful은 2026년 11월에 운영을 종료했습니다. 배포 주소(`senseful.vercel.app`)와 저장된 계정·학습 기록은 모두 삭제했고, 이 저장소는 기록으로 보관합니다.
 
 ## 이렇게 공부합니다
 
